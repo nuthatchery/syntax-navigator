@@ -2,10 +2,14 @@ module Triples
 import util::Math;
 import String;
 import IO;
+import Set;
+import List;
 data Id 
 	= uri(loc uri)
 	| integer(int i)
-	| ordinal(int i)
+	| character(int i)
+	| cardinal(str name, int i)
+	| ordinal(str name, int i)
 	| rational(rat r)
 	| string(str s)
 	| this()
@@ -14,7 +18,6 @@ data Id
 	| ident(Id parent, str name)
 	;
 
-
 public Id Id(int i) = integer(i);
 public Id Id(rat r) = rational(r);
 public Id Id(str s) = string(s);
@@ -22,6 +25,10 @@ public Id Id(loc u) = uri(u);
 
 alias Graph = rel[Id,Id,Id];
 
+public Id qualify(Id domain, Id base, Id i) = top-down visit(i) {
+	case this() => base
+	case ident(name) => ident(domain, name)
+};
 
 public Id MODELLING_ID = ident(root(), "modelling");
 public Id CONFORMS_TO = ident(MODELLING_ID, "conformsTo");
@@ -36,6 +43,9 @@ public Graph newGraph(str name) {
 	return g;
 }
 
+public Id newId(Graph g, str name) {
+	return ident(getOne(g, this(), IDENTITY), name);
+}
 public Graph modelling = newGraph("modelling");
 
 public Id getAll(Graph g, Id from, Id label) = g[from][label];
@@ -53,16 +63,94 @@ public Id getOne(Graph g, Id from, Id label) {
 public set[Id] getLabels(Graph g, Id from) = g[from]<0>;
 
 public loc toUri(integer(x)) = |values://integers/<"<x>">|;
-public loc toUri(ordinal(x)) = |values://ordinals/<"<x>">|;
+public loc toUri(character(x)) = |values://characters/<"<x>">|;
+public loc toUri(cardinal(n,x)) = |values://cardinals/<n>/<"<x>">|;
+public loc toUri(ordinal(n,x)) = |values://ordinals/<n>/<"<x>">|;
 public loc toUri(rational(x)) = |values://rationals/<"<numerator(x)>">/<"<denominator(x)>">|;
 public loc toUri(string(x)) = |values://strings/<"<percentEncode(escape(x, ("/":"\\/", "\\" : "\\\\")))>">|;
+public loc toUri(root()) = |values:///|;
 public loc toUri(uri(x)) = x;
+public loc toUri(ident(parent, x)) = toUri(parent) + x;
+public loc toUri(this()) { throw "Unqualified Id: this()"; }
+public loc toUri(ident(x)) { throw "Unqualified Id: ident(<x>)"; }
+
+public str uriStyle = "query";  // or "fragment"
+
+public str locToStr(loc l, str style = uriStyle) {
+	str frag = "";
+	str query = "";
+	if(style == "fragment") {
+		if(l.begin?) {
+			frag += "<l.begin.line>:<l.begin.column>";
+			if(l.end?) {
+				frag += "-<l.end.line>:<l.end.column>";
+			}		
+		}
+		if(l.offset? && l.length?) {
+			frag += "@<l.offset>+<l.length>";
+		}
+	}
+	else if(style == "query") {
+		if(l.offset? && l.length?) {
+			query = "offset=<l.offset>&length=<l.length>";
+		}
+		if(l.begin?) {
+			frag = "line<l.begin.line>";
+		}
+	}
+
+	if(l.fragment == "") {
+		l.fragment = frag;
+	}
+	if(query != "") {
+		l.query = l.query == "" ? query : "<l.query>&<query>";
+	}
+	return l.uri;
+}
+
+public loc strToLoc(str s) {
+	loc l = toLocation(s);
 	
+	if(/^<pre1:.*>(&|^)offset=<offset:[0-9]+><post1:.*>$/ := l.query) {
+		l.query = "<pre1><post1>";
+		if(/^<pre2:.*>(&|^)length=<length:[0-9]+><post2:.*>$/ := l.query) {
+			l.query = "<pre2><post2>";
+			l = l(toInt(offset),toInt(length));
+		}
+
+		if(/^line[0-9]+$/ := l.fragment)
+			l.fragment = "";
+	}
+	if(/^<bline:[0-9]+>:<bcol:[0-9]+>-<eline:[0-9]+>:<ecol:[0-9]+>@<offset:[0-9]+>\+<length:[0-9]+>$/ := l.fragment) {
+		l = l(toInt(offset),toInt(length),<toInt(bline),toInt(bcol)>,<toInt(eline),toInt(ecol)>);
+		l.fragment = "";		
+	}
+	
+	return l;
+}
+	
+public str toString(uri(x)) = "<x>";
+public str toString(integer(x)) = "<x>";
+public str toString(character(x)) = "\'<escape(stringChar(x))>\'";
+public str toString(cardinal(n,x)) = "<n>=<x>";
+public str toString(ordinal(n,x)) = "<n>#<x>";
+public str toString(rational(x)) = "<x>";
+public str toString(string(x)) = "\"<escape(x)>\"";
+public str toString(ident(root(),x)) = "/<x>";
+public str toString(ident(p,x)) = "<toString(p)>/<x>";
+public str toString(ident(x)) = "<x>";
+public str toString(root()) = "/";
+public str toString(this()) = "@";
+public str toString(<Id f, Id l, Id t>) = "<toString(f)> --<toString(l)>-\> <toString(t)>";
+public str toString(Graph g) = intercalate("\n", [toString(x) | x <- sort(g)]);
+
 public Id fromUri(loc u) {
 	if(u.scheme == "values") {
 		switch(u.authority) {
 		case "integers": return integer(toInt(split("/", u.path)[1]));
-		case "ordinals": return ordinal(toInt(split("/", u.path)[1]));
+		case "characters": return character(toInt(split("/", u.path)[1]));
+		case "cardinals": return cardinal(split("/", u.path)[1], toInt(split("/", u.path)[2]));
+		case "ordinals": return ordinal(split("/", u.path)[1], toInt(split("/", u.path)[2]));
 		case "rationals": return rational(toRat(toInt(split("/", u.path)[1]),toInt(split("/", u.path)[2])));
 		case "strings": return string(replaceAll(replaceAll(u.path[1..], "\\/", "/"), "\\\\", "\\"));
 		}
@@ -72,6 +160,27 @@ public Id fromUri(loc u) {
 	}
 }
 
+str obj(str key, str val) = "{\"type\":\"<key>\", \"value\":\"<escape(val)>\"}";
+public str toJson(uri(x)) = obj("uri", uriToStr(x));
+public str toJson(character(x)) = obj("character", escape(stringChar(x)));
+public str toJson(integer(n,x)) = "{\"type\":\"integer\", \"value\":<x>}";
+public str toJson(cardinal(n,x)) = "{\"type\":\"cardinal\", \"name\":\"<escape(n)>\", \"value\":<x>}";
+public str toJson(ordinal(n,x)) = "{\"type\":\"ordinal\", \"name\":\"<escape(n)>\", \"value\":<x>}";
+public str toJson(rational(x)) = "{\"type\":\"rational\", \"value\":[<numerator(x)>,<denominator(x)>]}";
+public str toJson(string(x)) = "\"<escape(x)>\"";
+public str toJson(i:ident(p,x)) = obj("identity", toString(i));
+public str toJson(i:ident(x)) = obj("identity", toString(i));
+public str toJson(root()) = obj("identity", "/");
+public str toJson(this()) = obj("identity", "@");
+public str toJson(<Id f, Id l, Id t>) = "{\"<toString(f)>\" : {\"<toString(l)>\":<toJson(t)>}}";
+public str toJson(<Id l, Id t>) = "{\"<toString(l)>\" : <toJson(t)>}";
+public str toJson(Graph g) {
+	list[str] r;
+	r = for(k <- sort(g<0>))  {
+		append "{ \"<toString(k)>\" :\n\t<intercalate(",\n\t", [toJson(e) | e <- g[k]])>}";
+	}
+ 	return intercalate(",\n", r);
+}
 
 @doc{
 .Synopsis
@@ -131,7 +240,7 @@ test bool uriConversionInt(int i) {
 
 test bool uriConversionOrd(int i) {
 	i = abs(i);
-	return fromUri(toUri(ordinal(i))).i == i; 
+	return fromUri(toUri(ordinal("foo", i))).i == i; 
 }
 
 test bool uriConversionStr(str s) {
@@ -142,3 +251,10 @@ test bool uriConversionUri(loc l) {
 	return fromUri(toUri(uri(l))).uri == l; 
 }
 
+test bool uriConversionUri(Id i) {
+	return fromUri(toUri(i)) == i; 
+}
+
+test bool locToStrToLoc(loc l) {
+	return strToLoc(locToStr(l, style="fragment")) == l;
+}

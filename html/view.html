@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <title>Grammar Viewer</title>
+        <script src="/js/vivagraph.js"></script>
+		<script
+			  src="https://code.jquery.com/jquery-3.2.1.min.js"
+			  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+			  crossorigin="anonymous"></script>			  
+        <script type='text/javascript'>
+            /*global Viva*/
+            $(function() {
+
+				$.ajax({
+						type: 'GET',
+						datatype: 'JSON',
+						url: '/api/v1/ParseTrees',
+						success: viewGraph
+				});
+			});
+			
+			function viewGraph(data) {
+                var graph = Viva.Graph.graph();
+
+				//$("#datadump").text(data);
+				var linkId = 0;
+				$.each(Object.keys(data), function() {
+					from = this;
+					map = data[from];
+					$.each(Object.keys(map), function() {
+						label = this;
+						to = map[label];
+						if($.isArray(to)) {
+							$.each(to, function() {
+								graph.addLink(from, this, { "label":label, "id":linkId});
+								linkId = linkId + 1;
+							});
+						}
+						else {
+							graph.addLink(from, to, {"label" : label, "id":linkId});
+							linkId = linkId + 1;
+						}
+					});
+				});
+				
+                var layout = Viva.Graph.Layout.forceDirected(graph, {
+                   springLength : 200,
+                   springCoeff : 0.0001,
+                   dragCoeff : 0.05, // 0.01,
+                   gravity : -1.2,
+                   theta : 1
+                });
+
+                var graphics = Viva.Graph.View.svgGraphics();
+                
+                // Rendering arrow shape is achieved by using SVG markers, part of the SVG
+            	// standard: http://www.w3.org/TR/SVG/painting.html#Markers
+            	var createMarker = function(id) {
+                    return Viva.Graph.svg('marker')
+                               .attr('id', id)
+                               .attr('viewBox', "0 0 10 10")
+                               .attr('refX', "9")
+                               .attr('refY', "5")
+                               .attr('markerUnits', "strokeWidth")
+                               .attr('markerWidth', "10")
+                               .attr('markerHeight', "5")
+                               //.attr('fill', 'inherit')
+                               .attr('orient', "auto");
+                };
+            	// Marker should be defined only once in <defs> child element of root <svg> element:
+            	var defs = graphics.getSvgRoot().append('defs');
+            	var labels = graphics.getSvgRoot().getElementsByTagName("g")[0].append('g').attr('id','labels');
+
+                marker = createMarker('Triangle');
+            	marker.append('path').attr('d', 'M 0 0 L 10 5 L 0 10 z');
+            	defs.append(marker);
+            
+                marker = createMarker('Arrow');
+                	//.attr('fill', 'none')
+                	//.attr('stroke', 'inherit');
+            	marker.append('path').attr('d', 'M 0 0 L 10 5 L 0 10');
+            	defs.append(marker);
+            
+				graphics.node(function(node){
+                        //var groupId = node.data.group;
+                        var circle = Viva.Graph.svg('circle')
+                            .attr('r', 14)
+                            .attr('stroke', 'currentColor')
+                            .attr('stroke-width', '1.5px');
+                            //.attr("fill", colors[groupId ? groupId - 1 : 5]);
+                        var txt = Viva.Graph.svg('text')
+                            .attr('fill', 'currentColor')
+                        	.attr("text-anchor", "middle")
+                        	.attr('style', 'text-shadow: 0px 0px 2px white;')
+                        	.text(node.id);
+                        txt.append(circle);
+                        return txt;
+                    }).placeNode(function(nodeUI, pos){
+                        nodeUI.attr( "x", pos.x).attr("y", pos.y);
+                    });
+                
+                var geom = Viva.Graph.geom();
+                var nodeSize = 24;
+                
+                graphics.link(function(link){
+                        var line = Viva.Graph.svg('path')
+                        		.attr('id', 'link' + link.data.id)
+                                .attr('marker-end', 'url(#Arrow)')
+                                .attr('stroke', 'currentColor')
+                                .attr('stroke-opacity', '0.5')
+                                .attr('stroke-width', '1.5px');
+                        var txt = labels.append('text')
+                        	.attr('x',0)
+                        	.attr('y',0)
+                        	.attr('text-anchor','middle');
+                        txt.append('textPath')
+                        	.attr('alignment-baseline', 'top')
+                        	.attr('startOffset', '50%')
+                        	.text(link.data.label)
+                        	.attr('style','font-size: 7px')
+                        	.attr('href', '#link' + link.data.id)
+                        ;
+                        return line;
+                }).placeLink(function(linkUI, fromPos, toPos) {
+                // Here we should take care about
+                //  "Links should start/stop at node's bounding box, not at the node center."
+                // For rectangular nodes Viva.Graph.geom() provides efficient way to find
+                // an intersection point between segment and rectangle
+                var toNodeSize = nodeSize,
+                    fromNodeSize = nodeSize;
+                var from = geom.intersectRect(
+                        // rectangle:
+                                fromPos.x - fromNodeSize / 2, // left
+                                fromPos.y - fromNodeSize / 2, // top
+                                fromPos.x + fromNodeSize / 2, // right
+                                fromPos.y + fromNodeSize / 2, // bottom
+                        // segment:
+                                fromPos.x, fromPos.y, toPos.x, toPos.y)
+                           || fromPos; // if no intersection found - return center of the node
+                var to = geom.intersectRect(
+                        // rectangle:
+                                toPos.x - toNodeSize / 2, // left
+                                toPos.y - toNodeSize / 2, // top
+                                toPos.x + toNodeSize / 2, // right
+                                toPos.y + toNodeSize / 2, // bottom
+                        // segment:
+                                toPos.x, toPos.y, fromPos.x, fromPos.y)
+                            || toPos; // if no intersection found - return center of the node
+                var data = 'M' + from.x + ',' + from.y +
+                           'L' + to.x + ',' + to.y;
+                linkUI.attr("d", data);
+            });
+                    
+                var renderer = Viva.Graph.View.renderer(graph,
+                    {
+                        layout     : layout,
+                        graphics   : graphics,
+                        renderLinks : true,
+                        prerender  : true
+                    });
+
+                renderer.run();
+            }
+        </script>
+        <style type='text/css'>
+            body {
+                height: 100%;
+                width: 100%;
+                position: absolute;
+                overflow: hidden;
+            }
+            canvas {
+                width: 100%;
+                height: 100%;
+            }
+            body > svg {
+                width: 100%;
+                height: 100%;
+             //   fill: #fff;
+            }
+        </style>
+    </head>
+    <body style="background-color: rgba(235,235,235,1);">
+	<div id="datadump"></div>
+    </body>
+</html>

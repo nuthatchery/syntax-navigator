@@ -17,6 +17,7 @@ data Id
 	| ident(str name)
 	| ident(Id parent, str name)
 	;
+	
 
 public Id Id(int i) = integer(i);
 public Id Id(rat r) = rational(r);
@@ -34,6 +35,11 @@ public Id MODELLING_ID = ident(root(), "modelling");
 public Id CONFORMS_TO = ident(MODELLING_ID, "conformsTo");
 public Id IDENTITY = ident(MODELLING_ID, "identity");
 public Id NAME = ident(MODELLING_ID, "name");
+public Id IS = ident(MODELLING_ID, "is");
+public Id HAS = ident(MODELLING_ID, "has");
+public Id ONE_OF = ident(MODELLING_ID, "oneOf"); // xor
+public Id ANY_OF = ident(MODELLING_ID, "anyOf"); // or
+public Id ALL_OF = ident(MODELLING_ID, "allOf"); // and
 
 public Graph newGraph(str name) {
 	Graph g = {};
@@ -48,7 +54,7 @@ public Id newId(Graph g, str name) {
 }
 public Graph modelling = newGraph("modelling");
 
-public Id getAll(Graph g, Id from, Id label) = g[from][label];
+public set[Id] getAll(Graph g, Id from, Id label) = g[from][label];
 
 public Id getOne(Graph g, Id from, Id label) {
 	xs = g[from][label];
@@ -62,6 +68,10 @@ public Id getOne(Graph g, Id from, Id label) {
 
 public set[Id] getLabels(Graph g, Id from) = g[from]<0>;
 
+public str escape(str s) = escape(s,
+	("\"" : "\\\"", "\\":"\\\\",
+	 "\b" : "\\b", "\f":"\\f", "\n":"\\n", "\r":"\\r", "\t":"\\t"));
+public str unescape(str s) = s;
 public loc toUri(integer(x)) = |values://integers/<"<x>">|;
 public loc toUri(character(x)) = |values://characters/<"<x>">|;
 public loc toUri(cardinal(n,x)) = |values://cardinals/<n>/<"<x>">|;
@@ -115,7 +125,7 @@ public loc strToLoc(str s) {
 		l.query = "<pre1><post1>";
 		if(/^<pre2:.*>(&|^)length=<length:[0-9]+><post2:.*>$/ := l.query) {
 			l.query = "<pre2><post2>";
-			l = l(toInt(offset),toInt(length));
+			l = l(toInt(offset),toInt(length),<1,0>,<1,0>);
 		}
 
 		if(/^line[0-9]+$/ := l.fragment)
@@ -144,6 +154,23 @@ public str toString(this()) = "@";
 public str toString(<Id f, Id l, Id t>) = "<toString(f)> --<toString(l)>-\> <toString(t)>";
 public str toString(Graph g) = intercalate("\n", [toString(x) | x <- sort(g)]);
 
+
+
+public Id fromString(/^\|<x:.*>\|$/) = uri(toLocation(x));
+public Id fromString(/^<x:[0-9]+>$/) = integer(toInt(x));
+public Id fromString(/^\'<x:.*>\'$/) = character(charAt(unescape(x),0));
+public Id fromString(/^<n:[a-zA-Z]+>=<x:[0-9]+>$/) = cardinal(n,toInt(x));
+public Id fromString(/^<n:[a-zA-Z]+>#<x:[0-9]+>$/) = ordinal(n,toInt(x));
+public Id fromString(/^<n:[0-9]+>r<d:[0-9]+>$/) = rational(toRat(toInt(n),toInt(d)));
+public Id fromString(/^\"<x:.*>\"$/) = string(unescape(x));
+public Id fromString(/^\/$/) = root();
+public Id fromString(/^@$/) = this();
+public Id fromString(/^\/<x:[^\/]+>$/) = ident(root(),x);
+public Id fromString(/^<p:.+>\/<x:[^\/]+>$/) = ident(fromString(p),x);
+public Id fromString(/^<x:.+>$/) = ident(x);
+//public Id fromString(<Id f, Id l, Id t>) = "<toString(f)> --<toString(l)>-\> <toString(t)>";
+//public Id fromString(Graph g) = intercalate("\n", [toString(x) | x <- sort(g)]);
+
 public Id fromUri(loc u) {
 	if(u.scheme == "values") {
 		switch(u.authority) {
@@ -161,9 +188,9 @@ public Id fromUri(loc u) {
 }
 
 str obj(str key, str val) = "{\"type\":\"<key>\", \"value\":\"<escape(val)>\"}";
-public str toJson(uri(x)) = obj("uri", uriToStr(x));
+public str toJson(uri(x)) = obj("uri", locToStr(x));
 public str toJson(character(x)) = obj("character", escape(stringChar(x)));
-public str toJson(integer(n,x)) = "{\"type\":\"integer\", \"value\":<x>}";
+public str toJson(integer(x)) = "{\"type\":\"integer\", \"value\":<x>}";
 public str toJson(cardinal(n,x)) = "{\"type\":\"cardinal\", \"name\":\"<escape(n)>\", \"value\":<x>}";
 public str toJson(ordinal(n,x)) = "{\"type\":\"ordinal\", \"name\":\"<escape(n)>\", \"value\":<x>}";
 public str toJson(rational(x)) = "{\"type\":\"rational\", \"value\":[<numerator(x)>,<denominator(x)>]}";
@@ -173,14 +200,35 @@ public str toJson(i:ident(x)) = obj("identity", toString(i));
 public str toJson(root()) = obj("identity", "/");
 public str toJson(this()) = obj("identity", "@");
 public str toJson(<Id f, Id l, Id t>) = "{\"<toString(f)>\" : {\"<toString(l)>\":<toJson(t)>}}";
-public str toJson(<Id l, Id t>) = "{\"<toString(l)>\" : <toJson(t)>}";
+public str toJson(<Id l, Id t>) = "\"<toString(l)>\" : <toJson(t)>";
+public bool jsonSimplified = true;
+public str toJson(rel[Id,Id] subG) {
+	vals = for(i <- subG<0>) {
+		tos = subG[i];
+		if(jsonSimplified && {t} := tos) {
+			append "\t\"<escape(toString(i))>\" : \"<escape(toString(t))>\"";
+		}
+		else {
+			append "\t\"<escape(toString(i))>\" : [<intercalate(", ", ["\"<escape(toString(e))>\"" | e <- subG[i]])>]";
+		}
+	}
+	return "{\n<intercalate(",\n", vals)>\n\t}";
+}
 public str toJson(Graph g) {
 	list[str] r;
+	list[str] vals;
 	r = for(k <- sort(g<0>))  {
-		append "{ \"<toString(k)>\" :\n\t<intercalate(",\n\t", [toJson(e) | e <- g[k]])>}";
+		append "\"<escape(toString(k))>\" : <toJson(g[k])>\n";
 	}
- 	return intercalate(",\n", r);
+ 	return "{\n<intercalate(",\n", r)>\n}\n";
 }
+
+public Graph qualifyGraph(Graph g) = qualifyGraph(g, getOne(g, this(), IDENTITY));
+
+public Graph qualifyGraph(Graph g, Id id) = visit(g) {
+	case this() => id
+	case ident(s) => ident(id, s)
+};
 
 @doc{
 .Synopsis

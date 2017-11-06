@@ -1,12 +1,12 @@
 module ParseTrees
 import List;
+import Productions;
 import ParseTree;
 import String;
 import Grammar;
 import util::Reflective;
 import lang::rascal::grammar::definition::Modules;
 import lang::rascal::\syntax::Rascal;
-import Productions;
 import IO;
 import Triples;
 
@@ -26,28 +26,11 @@ lexical Num = [0-9]+;
 layout LAYOUT = [\ \n\r\f\t]*;
 
 anno loc Expr@\loc;
-anno loc Production@\loc;
 
-public set[SyntaxDefinition] syntaxDefs = getModuleSyntaxDefinitions(parseModule(|project://syntax-navigator/src/ParseTrees.rsc|));
-public Grammar g = Productions::syntax2grammar(syntaxDefs);
-public map[Production, loc] findGrammarLocs(Grammar g) {
-	map[Production, loc] result = ();
-	top-down visit(g) {
-		case p:prod(def, syms, attrs): {
-			if(p@\loc?)
-				result[p] = p@\loc;
-		}	
-	}
-	return result;
-}
-public map[Production, loc] grammarLocs = findGrammarLocs(g);
 
-Id nextId(ident(old), int childNum) = ident("<old>/<childNum>");
-Id nextId(ident(parent, old), int childNum) = ident(parent, "<old>/<childNum>");
+Id nextId(ident(old), int childNum) = ident("<old>.<childNum>");
+Id nextId(ident(parent, old), int childNum) = ident(parent, "<old>.<childNum>");
 
-Id childEdgeId(int childNum) = ident("CHILD_<childNum>");
-
-public Graph metaGrammar = newGraph("metaGrammar");
 public Graph metaParseTree = newGraph("metaParseTree");
 public Id PRODUCTION_STRING = newId(metaParseTree, "productionString");
 public Id PRODUCTION_LOC = newId(metaParseTree, "productionLoc");
@@ -66,11 +49,11 @@ public Graph ptToGraph(Tree t, str name) {
 	g += <this(), ROOT, ident("0")>;
 	return ptToGraph(t, ident("0"), g);
 }
-public Graph ptToGraph(tree:appl(prod, args), Id id, Graph g) {
+public Graph ptToGraph(tree:appl(p, args), Id id, Graph g) {
 	g += <id, CONFORMS_TO, APPL>;
-	g += <id, PRODUCTION_STRING, string(prodToStr(prod))>;
-	
-	prodNoLayouts = innermost visit(prod) { case [*as,\layouts(_),*bs] => [*as,*bs] };
+	g += <id, PRODUCTION_STRING, string(prodToStr(p))>;
+
+	prodNoLayouts = innermost visit(p) { case [*Symbol as1,\layouts(_),*Symbol as2] => [*as1,*as2] };
 	
 	if(prodNoLayouts in grammarLocs) {
 		g += <id, PRODUCTION_LOC,  uri(grammarLocs[prodNoLayouts])>;
@@ -82,8 +65,8 @@ public Graph ptToGraph(tree:appl(prod, args), Id id, Graph g) {
 		g += <id, SOURCE, uri(tree@\loc)>;
 	}
 	
-	if(prod(lit(_),_,_) := prod 
-	   || prod(lex(_),_,_) := prod) {
+	if(prod(lit(_),_,_) := p 
+	   || prod(lex(_),_,_) := p) {
 		g += <id, STRING_VALUE, string(unparse(tree))>;
  	}
 	int layoutCount = 0;
@@ -104,7 +87,7 @@ public Graph ptToGraph(tree:appl(prod, args), Id id, Graph g) {
 	return g;
 }
 
-public Graph ptToGraph(amb(prod, args), Id id, Graph g) {
+public Graph ptToGraph(amb(args), Id id, Graph g) {
 	g += <id, CONFORMS_TO, AMB>;
 
 	int i = 0;

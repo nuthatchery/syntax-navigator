@@ -19,16 +19,16 @@ import lang::rascal::grammar::definition::Names;
 import Grammar;
 import List; 
 import String;    
-import ParseTree;
+extend ParseTree;
 import IO;  
 import util::Math;
 import util::Maybe;
 
 anno loc SyntaxDefinition@\loc;
 anno loc Production@\loc;
-//anno loc Production@location;
 anno loc Symbol@\loc;
 anno loc node@\loc;
+anno loc Tree@\loc;
 
 // conversion functions
 

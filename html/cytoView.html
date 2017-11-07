@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <title>Grammar Viewer</title>
+        <script src="/js/cytoscape.min.js"></script>
+        <script src="/js/cola.v3.min.js"></script>
+        <script src="/js/cytoscape-cola.js"></script>
+		<script src="/js/jquery-3.2.1.min.js"></script>			  
+        <script type='text/javascript'>
+            
+            $(function() {
+	            var args = getUrlVars();
+            	var graph = '/ParseTrees';
+            	var query = '?format=cyto';
+				if('graph' in args) {
+					graph = args['graph'];
+				}
+				if('filter' in args) {
+					query += '&filter=' + args['filter'];
+				}
+				$.ajax({
+						type: 'GET',
+						datatype: 'JSON',
+						url: '/api/v1' + graph + query,
+						success: viewGraph
+				});
+			});
+			// Read a page's GET URL variables and return them as an associative array.
+			// from: http://jquery-howto.blogspot.no/2009/09/get-url-parameters-values-with-jquery.html
+function getUrlVars()
+{
+    var vars = [], hash;
+    var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+    console.log(hashes);
+    for(var i = 0; i < hashes.length; i++)
+    {
+        hash = hashes[i].split('=');
+        vars.push(hash[0]);
+        vars[hash[0]] = hash[1];
+    }
+    return vars;
+}
+
+			function viewGraph(data) {
+				var layoutOpts = { name: 'cola',
+						flow: {axis: 'y', minSeparation: 150},
+						avoidOverlaps: true,
+						maxSimulationTime: 5000,
+						//animate: false,
+						//infinite: true,
+						randomize: false,
+						unconstrIter: 10,
+						userConstIter: 2,
+						allConstIter: 2,
+//						edgeLength: 70,
+//						edgeJaccardLength: 170
+					 };
+				//layoutOpts = { name: 'cose', animate: true, refresh: 1, randomize: false };
+				var cy = cytoscape({
+					container: document.getElementById('cy'),
+					elements : [],
+					autolock: false,
+					autounselectify: false,
+					autoungrabify: false,
+					selectionType: 'single',
+					style: [ // the stylesheet for the graph
+					  	{ selector: '*',
+					  	  style: {
+					  		'min-zoomed-font-size' : '8'
+					  	  }
+					  	},
+					    {
+					      selector: 'node',
+					      style: {
+					        'background-color': '#f88',
+					        'background-opacity' : '0.5',
+					        'label': 'data(text)'
+					      }
+					    },
+					    {
+					      selector: 'node:selected',
+					      style: {
+					        'background-color': '#88f',
+					      }
+					    },
+					  	{ selector: '[?local]',
+					  	  style: {
+					        'background-opacity' : '1'
+					  	  }
+					  	},
+					    {
+					      selector: 'edge',
+					      style: {
+					        'width': 3,
+					        'curve-style': 'bezier',
+					        'line-color': '#ccc',
+					        'target-arrow-color': '#ccc',
+					        'target-arrow-shape': 'triangle-backcurve',
+					        'target-arrow-fill': 'hollow',
+					        'text-rotation': 'autorotate',
+					        'arrow-scale': 2,
+					        'label': 'data(text)'
+					      }
+					    }
+					  ], layout: {name: 'null'}});
+					  
+					  cy.on('layoutready', function(evt) {
+						console.log("LAYOUT READY");
+      				  });
+					  
+				      cy.on('layoutstop', function(evt) {
+						console.log("LAYOUT STOP");
+      				  });
+      	 
+      				  cy.on('layoutstart', function(evt) {
+      					console.log("LAYOUT START");
+      				  });
+				
+				//cy.startBatch();
+				data.forEach(function(ele,i,eles) {
+					cy.add(ele);
+				});
+				localNodes = cy.collection('[?local]');
+				remoteNodes = cy.collection('[!local]');
+				
+				remoteNodes.style('display','none');
+				remoteNodes.style('opacity',0.01);
+				
+				var layout = localNodes.layout(layoutOpts);
+				var grabHandler;
+				layout.pon('layoutstop').then(function(e){
+					console.log("laying out the rest");
+					localNodes.lock();
+					remoteNodes.style('display','element');
+					remoteNodes.animate({
+						style: {opacity: 1.0}
+						}, { duration: 4000});
+					layout = cy.layout(layoutOpts);
+					layout.run();
+					layout.pon('layoutstop').then(function(e){
+						console.log("done");
+						localNodes.unlock();
+						cy.on('grab free position', 'node', grabHandler);
+					});
+				});
+				console.log("laying out local nodes");
+				layout.run();
+				
+				cy.nodes().forEach(function(ele,i,eles) {
+					ele.data('text', getText(ele));
+				});
+				cy.edges().forEach(function(ele,i,eles) {
+					ele.data('text', ele.data('id').split("/").pop());
+				});
+				//cy.endBatch();
+
+// handle node dragging
+	  var timer;
+      grabHandler = function(e){
+		var bb = layout.options.boundingBox || { x1: 0, y1: 0, w: cy.width(), h: cy.height() };
+      if( bb.x2 === undefined ){ bb.x2 = bb.x1 + bb.w; }
+      if( bb.w === undefined ){ bb.w = bb.x2 - bb.x1; }
+      if( bb.y2 === undefined ){ bb.y2 = bb.y1 + bb.h; }
+      if( bb.h === undefined ){ bb.h = bb.y2 - bb.y1; }
+      
+      	function setTimer() {
+              if(timer)
+        	clearTimeout(timer);
+        timer = setTimeout(function(){
+          if( !layout.manuallyStopped ){
+            layout.adaptor.stop();
+          }
+		}, layout.options.maxSimulationTime);
+      	}
+              var node = this;
+        var scrCola = node.scratch().cola;
+        var pos = node.position();
+        var nodeIsTarget = e.cyTarget === node || e.target === node;
+
+        if( !nodeIsTarget ){ return; }
+
+        switch( e.type ){
+          case 'grab':
+			console.log("Grabbing node " + node.data('id'));
+            layout.adaptor.dragstart( scrCola );
+            layout.adaptor.resume();
+            setTimer();
+            break;
+          case 'free':
+			console.log("Freeing node " + node.data('id'));
+            layout.adaptor.dragend( scrCola );
+            setTimer();
+            break;
+          case 'position':
+            // only update when different (i.e. manual .position() call or drag) so we don't loop needlessly
+            if( scrCola.px !== pos.x - bb.x1 || scrCola.py !== pos.y - bb.y1 ){
+              scrCola.px = pos.x - bb.x1;
+              scrCola.py = pos.y - bb.y1;
+              layout.adaptor.resume();
+            }
+            break;
+        }
+      };
+      
+      
+	
+				window.cy = cy;
+				window.layout = layout;
+				window.layoutOpts = layoutOpts;
+				
+            }
+            
+            function getText(ele) {
+            	switch(ele.data('type')) {
+            	case 'integer':
+            		return ele.data('intValue');
+            	case 'cardinal':
+            		return ele.data('intValue');
+            	case 'ordinal':
+            		return ele.data('intValue');
+            	case 'rational':
+            		return ele.data('value');
+            	case 'character':
+            		return ele.data('strValue');
+            	case 'string':
+            		return ele.data('strValue');
+            	case 'identity':
+            	default:
+            		return ele.data('id').split("/").pop();
+            	}
+            }
+        </script>
+        <style type='text/css'>
+            body {
+                height: 100%;
+                width: 100%;
+                position: absolute;
+                overflow: hidden;
+            }
+            canvas {
+                width: 100%;
+                height: 100%;
+            }
+            #cy {
+                width: 100%;
+                height: 100%;
+             //   fill: #fff;
+            }
+            .literal { font-family: Courier; }
+            .iterStar:after { content: "*"; }
+            .iterPlus { font-style: italic; text: "+";}
+            .iterPlus:after { content: "+"; }
+            
+        </style>
+    </head>
+    <body style="background-color: rgba(235,235,235,1);">
+	<div id="cy"></div>
+	<div id="datadump"></div>
+    </body>
+</html>

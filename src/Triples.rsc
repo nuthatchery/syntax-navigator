@@ -4,6 +4,29 @@ import String;
 import IO;
 import Set;
 import List;
+
+syntax TripleQuery
+	= "and" "(" {TripleQuery ","}* ")"
+	| "or" "(" {TripleQuery ","}* ")"
+	| "not" "(" TripleQuery ")"
+	| "label" "(" TripleId ")"
+	| "from" "(" TripleId ")"
+	| "to" "(" TripleId ")"
+	| "true"
+	| "false"
+	;
+	
+lexical TripleId
+	= Ident: ![\ \t\n\f()\[\]0-9\"\'] (![#:\ \t\n\f()\[\]\"\'] | ([\\] ![]))*
+	| Card: TripleIdNameChar+ ":" ([0-9]+|"*")     
+	| Ord: TripleIdNameChar+ "#" ([0-9]+|"*")     
+	| Int: [0-9]+
+	; 
+
+lexical TripleIdNameChar
+	= [a-zA-Z]
+	;
+	
 data Id 
 	= uri(loc uri)
 	| integer(int i)

@@ -10,16 +10,40 @@
 			  crossorigin="anonymous"></script>			  
         <script type='text/javascript'>
             /*global Viva*/
+            
+            var ARGS = getUrlVars();
+            
             $(function() {
-
+            	var graph = '/ParseTrees';
+            	var query = '';
+				if('graph' in ARGS) {
+					graph = ARGS['graph'];
+				}
+				if('filter' in ARGS) {
+					query = '?filter=' + ARGS['filter'];
+				}
 				$.ajax({
 						type: 'GET',
 						datatype: 'JSON',
-						url: '/api/v1/ParseTrees',
+						url: '/api/v1' + graph + query,
 						success: viewGraph
 				});
 			});
-			
+			// Read a page's GET URL variables and return them as an associative array.
+			// from: http://jquery-howto.blogspot.no/2009/09/get-url-parameters-values-with-jquery.html
+function getUrlVars()
+{
+    var vars = [], hash;
+    var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+    for(var i = 0; i < hashes.length; i++)
+    {
+        hash = hashes[i].split('=');
+        vars.push(hash[0]);
+        vars[hash[0]] = hash[1];
+    }
+    return vars;
+}
+
 			function viewGraph(data) {
                 var graph = Viva.Graph.graph();
 
@@ -28,24 +52,27 @@
 				$.each(Object.keys(data), function() {
 					from = this;
 					map = data[from];
+					graph.addNode(from, map);
 					$.each(Object.keys(map), function() {
 						label = this;
-						to = map[label];
-						if($.isArray(to)) {
-							$.each(to, function() {
-								graph.addLink(from, this, { "label":label, "id":linkId});
+						if(!label.match(/^\/modelling\//)) {
+							to = map[label];
+							if($.isArray(to)) {
+								$.each(to, function() {
+									graph.addLink(from, this, { "label":label, "id":linkId});
+									linkId = linkId + 1;
+								});
+							}
+							else {
+								graph.addLink(from, to, {"label" : label, "id":linkId});
 								linkId = linkId + 1;
-							});
-						}
-						else {
-							graph.addLink(from, to, {"label" : label, "id":linkId});
-							linkId = linkId + 1;
+							}
 						}
 					});
 				});
 				
                 var layout = Viva.Graph.Layout.forceDirected(graph, {
-                   springLength : 200,
+                   springLength : 50,
                    springCoeff : 0.0001,
                    dragCoeff : 0.05, // 0.01,
                    gravity : -1.2,
@@ -93,8 +120,16 @@
                             .attr('fill', 'currentColor')
                         	.attr("text-anchor", "middle")
                         	.attr('style', 'text-shadow: 0px 0px 2px white;')
-                        	.text(node.id);
-                        txt.append(circle);
+                        	.text(node.id.startsWith("/") ? node.id.split("/").pop() : node.id)
+                        if(node.data != null) {
+	                        console.log(node.data);
+    	                    var title = txt.append('title');
+    	                    if('/modelling/is' in node.data) {
+        	                	title.text(node.data['/modelling/is']);
+                        		txt = txt.attr("class", [node.data['/modelling/is'].split("/").pop()]);
+                        		  //   node.data['/modelling/conformsTo'].split("/").pop()]);
+                        	}
+                       	}
                         return txt;
                     }).placeNode(function(nodeUI, pos){
                         nodeUI.attr( "x", pos.x).attr("y", pos.y);
@@ -114,10 +149,11 @@
                         	.attr('x',0)
                         	.attr('y',0)
                         	.attr('text-anchor','middle');
+                        
                         txt.append('textPath')
                         	.attr('alignment-baseline', 'top')
                         	.attr('startOffset', '50%')
-                        	.text(link.data.label)
+                        	.text(link.data.label.split("/").pop())
                         	.attr('style','font-size: 7px')
                         	.attr('href', '#link' + link.data.id)
                         ;
@@ -179,6 +215,11 @@
                 height: 100%;
              //   fill: #fff;
             }
+            .literal { font-family: Courier; }
+            .iterStar:after { content: "*"; }
+            .iterPlus { font-style: italic; text: "+";}
+            .iterPlus:after { content: "+"; }
+            
         </style>
     </head>
     <body style="background-color: rgba(235,235,235,1);">

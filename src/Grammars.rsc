@@ -38,6 +38,7 @@ public Id ALT_SYM = newId(metaGrammar, "alternatives");
 public Id SEQ_SYM = newId(metaGrammar, "sequence");
 public Id SOURCE = newId(metaGrammar, "source");
 public Id STRING_VALUE = newId(metaGrammar, "stringValue");
+public Id ELEMENT = newId(metaGrammar, "element");
 
 Id nextId(this(), int childNum) = ident(".<childNum>");
 Id nextId(ident(parent, old), int childNum) = ident(parent, "<old>.<childNum>");
@@ -83,7 +84,7 @@ public tuple[Graph,SymTable] prodToGraph(P:choice(_,alts), Id id, Graph g, SymTa
 	int i = 0;
 	for(p <- alts) {
 		childId = nextId(id, i);
-		g += <id, ANY_OF, childId>;
+		g += <id, ELEMENT, childId>;
 		<g, symTable> = prodToGraph(p, childId, g, symTable);
 		i += 1;
 	}
@@ -92,7 +93,7 @@ public tuple[Graph,SymTable] prodToGraph(P:choice(_,alts), Id id, Graph g, SymTa
 public tuple[Graph,SymTable] prodToGraph(P:prod(s,syms,_), Id id, Graph g, SymTable symTable) {
 	//<id, symTable> = symToId(s, id, symTable);
 	g += <id, CONFORMS_TO, PRODUCTION>;
-	g += <id, STRING_VALUE, string(prodToStr(P))>;
+//	g += <id, STRING_VALUE, string(prodToStr(P))>;
 	if(P@\loc?) {
 		g += <id, SOURCE, uri(P@\loc)>;
 	}
@@ -106,7 +107,7 @@ public tuple[Graph,SymTable] symToGraph(S:alt(alts), Id id, Graph g, SymTable sy
 	for(p <- alts) {
 		childId = nextId(id, i);
 		<childId, symTable> = symToId(p, childId, symTable);
-		g += <id, ANY_OF, childId>;
+		g += <id, ELEMENT, childId>;
 		<g, symTable> = symToGraph(p, childId, g, symTable);
 		i += 1;
 	}
@@ -132,7 +133,7 @@ public tuple[Graph,SymTable] symToGraph(S:iter(Symbol s), Id id, Graph g, SymTab
 	g += <id, IS, ITER_PLUS_SYM>;
 	childId = nextId(id, 0);
 	<childId, symTable> = symToId(s, childId, symTable);
-	g += <id, HAS, childId>;
+	g += <id, ELEMENT, childId>;
 	<g, symTable> = symToGraph(s, childId, g, symTable);
 	return <g, symTable>;
 }
@@ -140,13 +141,13 @@ public tuple[Graph,SymTable] symToGraph(S:iter(Symbol s), Id id, Graph g, SymTab
 public tuple[Graph,SymTable] symToGraph(S:\char-class(rng), Id id, Graph g, SymTable symTable) {
 	g += <id, CONFORMS_TO, SYMBOL>;
 	g += <id, IS, CC_SYM>;
-	g += <id, STRING_VALUE, string(printSymbol(S,true))>;
+	//g += <id, STRING_VALUE, string(printSymbol(S,true))>;
 	for(range(f,t) <- rng) {
 		if(f == t) {
-			g += <id, ANY_OF, uri(|values://characters/<"<f>">|)>;
+			g += <id, ELEMENT, uri(|values://characters/<"<f>">|)>;
 		}
 		else {
-			g += <id, ANY_OF, uri(|values://characters/<"<f>">/to/<"<t>">|)>;
+			g += <id, ELEMENT, uri(|values://characters/<"<f>">/to/<"<t>">|)>;
 		}
 	}
 	return <g, symTable>;
@@ -157,7 +158,7 @@ public tuple[Graph,SymTable] symToGraph(S:\iter-star(s), Id id, Graph g, SymTabl
 	g += <id, IS, ITER_STAR_SYM>;
 	childId = nextId(id, 0);
 	<childId, symTable> = symToId(s, childId, symTable);
-	g += <id, HAS, childId>;
+	g += <id, ELEMENT, childId>;
 	<g, symTable> = symToGraph(s, childId, g, symTable);
 	return <g, symTable>;
 }

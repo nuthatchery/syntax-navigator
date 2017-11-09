@@ -1,261 +1,545 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>Grammar Viewer</title>
-        <script src="/js/cytoscape.min.js"></script>
-        <script src="/js/cola.v3.min.js"></script>
-        <script src="/js/cytoscape-cola.js"></script>
-		<script src="/js/jquery-3.2.1.min.js"></script>			  
-        <script type='text/javascript'>
-            
-            $(function() {
-	            var args = getUrlVars();
-            	var graph = '/ParseTrees';
-            	var query = '?format=cyto';
-				if('graph' in args) {
-					graph = args['graph'];
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Grammar Viewer</title>
+<link rel="stylesheet" href="/js/codemirror.css">
+<script src="/js/cytoscape.min.js"></script>
+<script src="/js/cola.v3.min.js"></script>
+<script src="/js/cytoscape-cola.js"></script>
+<script src="/js/jquery-3.2.1.min.js"></script>
+<script src="/js/codemirror.min.js"></script>
+<script type='text/javascript'>
+	var cy;
+	$(function() {
+		var args = getUrlVars();
+		var graph = '/ParseTrees';
+		var query = '?format=cyto';
+		if ('graph' in args) {
+			graph = args['graph'];
+		}
+		if ('filter' in args) {
+			query += '&filter=' + args['filter'];
+		}
+		$('#status').html("Loading Graph...");
+		$.ajax({
+			type : 'GET',
+			datatype : 'JSON',
+			url : '/api/v1' + graph + query,
+			success : viewGraph
+		});
+		
+		var myCodeMirror = CodeMirror(document.getElementById('right'), {
+			  value: "function myScript(){return 100;}\n",
+			  //mode:  "javascript"
+		});
+	});
+	// Read a page's GET URL variables and return them as an associative array.
+	// from: http://jquery-howto.blogspot.no/2009/09/get-url-parameters-values-with-jquery.html
+	function getUrlVars() {
+		var vars = [], hash;
+		var hashes = window.location.href.slice(
+				window.location.href.indexOf('?') + 1).split('&');
+		console.log(hashes);
+		for (var i = 0; i < hashes.length; i++) {
+			hash = hashes[i].split('=');
+			vars.push(hash[0]);
+			vars[hash[0]] = hash[1];
+		}
+		return vars;
+	}
+
+	function viewGraph(data) {
+		var layoutOpts = {
+			name : 'cola',
+			flow : {
+				axis : 'y',
+				minSeparation : 150
+			},
+			avoidOverlaps : true,
+			maxSimulationTime : 1000,
+			//animate: false,
+			//infinite: true,
+			randomize : false,
+			unconstrIter : 50,
+			userConstIter : 20,
+			allConstIter : 20,
+			fit : false,
+		//						edgeLength: 10,
+		//						edgeJaccardLength: 170
+		};
+		//layoutOpts = { name: 'cose', animate: true, refresh: 1, randomize: false };
+		cy = cytoscape({
+			container : document.getElementById('cy'),
+			elements : [],
+			autolock : false,
+			autounselectify : false,
+			autoungrabify : false,
+			selectionType : 'single',
+			style : [ // the stylesheet for the graph
+			{
+				selector : '*',
+				style : {
+					'min-zoomed-font-size' : '8',
+					'z-index' : 100
 				}
-				if('filter' in args) {
-					query += '&filter=' + args['filter'];
+			}, {
+				selector : 'node',
+				style : {
+					'background-color' : '#f88',
+					'background-opacity' : '0.5',
+					'label' : 'data(text)',
 				}
-				$.ajax({
-						type: 'GET',
-						datatype: 'JSON',
-						url: '/api/v1' + graph + query,
-						success: viewGraph
+			}, {
+				selector : 'node:selected',
+				style : {
+					'background-color' : '#88f',
+				}
+			}, {
+				selector : '.\\/values\\/uris',
+				style : {
+					'shape' : 'tag',
+					'width' : 'label',
+					'height' : 'label',
+					'text-halign' : 'center',
+					'text-valign' : 'center'
+				}
+			}, {
+				selector : '.\\/metaGrammar\\/symbol',
+				style : {
+					'shape' : 'triangle'
+				}
+			}, {
+				selector : '.\\/metaGrammar\\/production',
+				style : {
+					'shape' : 'rhomboid'
+				}
+			}, {
+				selector : '[label="/modelling/is"]',
+				style : {
+					'display' : 'none'
+				}
+			}, {
+				selector : '[?local]',
+				style : {
+					'background-opacity' : '1'
+				}
+			}, {
+				selector : 'edge',
+				style : {
+					'width' : 2,
+					'curve-style' : 'bezier',
+					'color' : '#666',
+					'line-color' : '#ccc',
+					'target-arrow-color' : '#ccc',
+					'target-arrow-shape' : 'triangle',
+					'target-arrow-fill' : 'filled',
+					'text-rotation' : 'autorotate',
+					'arrow-scale' : 1,
+					'label' : 'data(text)'
+				}
+			}, {
+				selector : 'edge[?structural]',
+				style : {
+					'line-color' : '#f00',
+					'width' : 5,
+				}
+			}, {
+				selector : 'node.owner',
+				style : {
+					display : 'none',
+					'background-width' : 200,
+					'background-height' : 200,
+					'opacity' : 1,
+					'text-halign' : 'center',
+					'text-valign' : 'center'
+				}
+			}, {
+				selector : 'edge.owner',
+				style : {
+					display : 'none',
+					'opacity' : 1,
+					'z-index' : 0
+				}
+			}, ],
+			layout : {
+				name : 'null'
+			}
+		});
+
+		cy.on('layoutready', function(evt) {
+			console.log("LAYOUT READY");
+		});
+
+		cy.on('layoutstop', function(evt) {
+			console.log("LAYOUT STOP");
+		});
+
+		cy.on('layoutstart', function(evt) {
+			console.log("LAYOUT START");
+		});
+
+		cy.on('tap', function(evt) {
+			console.log("Element: " + JSON.stringify(evt.target.data()));
+			console.log("  style classes: "
+					+ JSON.stringify(evt.target._private.classes));
+		});
+
+		//cy.startBatch();
+		var newElements = [];
+		data.forEach(function(ele, i, eles) {
+			o = cy.add(ele);
+			newElements.push(o);
+		});
+		newElements.forEach(function(o, i, eles) {
+			o.addClass(o.data('owner'));
+			cy.add([ {
+				group : "nodes",
+				data : {
+					id : "__" + o.data('owner') + "__",
+					text : o.data('owner')
+				},
+				classes : "owner"
+			}, {
+				group : "edges",
+				data : {
+					source : o.id(),
+					target : "__" + o.data('owner') + "__"
+				},
+				classes : "owner"
+			} ]);
+			o.style('opacity', 0.01);
+			if (o.data('label')) {
+				o.data('text', o.data('label').split("/").pop());
+				desc = cy.$id(o.data('label'));
+				if (desc
+						&& desc.edgesTo(cy.$id('/metaGraph/structural')).is(
+								'[label="/modelling/is"]')) {
+					o.data('structural', true);
+				} else if (o.data('type') == 'ordinal'
+						&& o.source().data('structural')) {
+					o.data('structural', true);
+				}
+			} else {
+				if (o.edgesTo(cy.$id('/metaGraph/structural')).is(
+						'[label="/modelling/is"]')) {
+					o.data('structural', true);
+				}
+				o.data('text', getText(o));
+			}
+			if (o.data('local')) {
+				o.animate({
+					style : {
+						'opacity' : 1.0
+					}
+				}, {
+					duration : 500
+				});
+			} else {
+				o.animate({
+					style : {
+						'opacity' : 1.0
+					}
+				}, {
+					duration : 5000
+				});
+			}
+		});
+
+		cy.edges('[label="/modelling/conformsTo"]').forEach(
+				function(ele, i, eles) {
+					ele.source().addClass(ele.target().data('id'));
+				});
+		//cy.nodes().forEach(function(ele,i,eles) {
+		//	console.log(ele);
+		//});
+		localNodes = cy.collection('[?local]');
+		remoteNodes = cy.collection('[!local]');
+
+		var layout = cy.layout($.extend(layoutOpts, {
+			edgeFilter : function(edge) {
+				return edge.data('structural');
+			}, //  || edge.data('owner') || edge.data('label') == '/metaGrammar/source'; },
+			//					edgeFilter: function(edge) { return edge.data('label').match(/element/);  },
+			//					edgeLength: function(edge) { return edge.data('label') == '/metaGrammar/source' ? 350 : 150; },
+		}));
+		var layoutAll = cy.layout($.extend(layoutOpts, {	
+			unconstrIter : 0,
+			userConstIter : 0,
+			allConstIter : 0,
+			refresh: 1,
+		}));
+		var grabHandler;
+		layout.pon('layoutstop').then(function(e) {
+			//console.log("laying out the rest");
+			localNodes.lock();
+			//remoteNodes.style('display','element');
+			//remoteNodes.animate({style: {'opacity': 0.7}}, { duration: 1000});
+			layoutAll.run();
+			layoutAll.pon('layoutstop').then(function(e){
+				console.log("fixing other nodes");
+				localNodes.unlock();
+				layout = cy.layout($.extend(layoutOpts, {
+					unconstrIter : 0, userConstIter : 0, allConstIter : 0, fit: false,
+					maxSimulationTime: 3000,
+					edgeFilter : function(edge) {
+						return edge.data('structural');
+					}, //  || edge.data('owner') || edge.data('label') == '/metaGrammar/source'; },
+			}));
+					layout.run();
+				layout.pon('layoutstop').then(function(e){
+					console.log("done");
+					cy.on('grab free position', 'node', grabHandler);
 				});
 			});
-			// Read a page's GET URL variables and return them as an associative array.
-			// from: http://jquery-howto.blogspot.no/2009/09/get-url-parameters-values-with-jquery.html
-function getUrlVars()
-{
-    var vars = [], hash;
-    var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
-    console.log(hashes);
-    for(var i = 0; i < hashes.length; i++)
-    {
-        hash = hashes[i].split('=');
-        vars.push(hash[0]);
-        vars[hash[0]] = hash[1];
-    }
-    return vars;
+			//});
+		});
+		layout.pon('layoutready').then(function(e) {
+			console.log("FIT!");
+			cy.fit();
+		});
+		console.log("laying out local nodes");
+		
+		cy.on('layoutstart', function(e) {
+			$('#status').html("Laying out nodes");
+		});
+		cy.on('layoutstop', function(e) {
+			if($('#status').text() == "Laying out nodes")
+				$('#status').html("OK");
+		});
+		
+		cy.fit();
+		layout.run();
+
+		//cy.endBatch();
+
+		// handle node dragging
+		var timer;
+		grabHandler = function(e) {
+			var bb = layout.options.boundingBox || {
+				x1 : 0,
+				y1 : 0,
+				w : cy.width(),
+				h : cy.height()
+			};
+			if (bb.x2 === undefined) {
+				bb.x2 = bb.x1 + bb.w;
+			}
+			if (bb.w === undefined) {
+				bb.w = bb.x2 - bb.x1;
+			}
+			if (bb.y2 === undefined) {
+				bb.y2 = bb.y1 + bb.h;
+			}
+			if (bb.h === undefined) {
+				bb.h = bb.y2 - bb.y1;
+			}
+
+			function setTimer() {
+				if (timer)
+					clearTimeout(timer);
+				timer = setTimeout(function() {
+					if (!layout.manuallyStopped) {
+						layout.adaptor.stop();
+					}
+				}, layout.options.maxSimulationTime);
+			}
+			var node = this;
+			var scrCola = node.scratch().cola;
+			var pos = node.position();
+			var nodeIsTarget = e.cyTarget === node || e.target === node;
+
+			if (!nodeIsTarget) {
+				return;
+			}
+
+			switch (e.type) {
+			case 'grab':
+				console.log("Grabbing node " + node.data('id'));
+				layout.adaptor.dragstart(scrCola);
+				layout.adaptor.resume();
+				setTimer();
+				break;
+			case 'free':
+				console.log("Freeing node " + node.data('id'));
+				layout.adaptor.dragend(scrCola);
+				setTimer();
+				break;
+			case 'position':
+				// only update when different (i.e. manual .position() call or drag) so we don't loop needlessly
+				if (scrCola.px !== pos.x - bb.x1
+						|| scrCola.py !== pos.y - bb.y1) {
+					scrCola.px = pos.x - bb.x1;
+					scrCola.py = pos.y - bb.y1;
+					layout.adaptor.resume();
+				}
+				break;
+			}
+		};
+
+		window.cy = cy;
+		window.layout = layout;
+		window.layoutOpts = layoutOpts;
+
+	}
+
+	function getText(ele) {
+		if (ele.data('/metaGrammar/stringValue'))
+			return ele.data('/metaGrammar/stringValue')[0];
+		if (ele.data('/modelling/name'))
+			return ele.data('/modelling/name')[0];
+		switch (ele.data('type')) {
+		case 'integer':
+			return ele.data('intValue');
+		case 'cardinal':
+			return ele.data('intValue');
+		case 'ordinal':
+			return ele.data('intValue');
+		case 'rational':
+			return ele.data('value');
+		case 'character':
+			return ele.data('strValue');
+		case 'string':
+			return ele.data('strValue');
+		case 'identity':
+		default:
+			return ele.data('id').split("/").pop();
+		}
+	}
+</script>
+<style type='text/css'>
+body {
+	height: 100%;
+	width: 100%;
+	position: absolute;
+	overflow: hidden;
+	font-family: sans;
+	margin: 0px;
 }
 
-			function viewGraph(data) {
-				var layoutOpts = { name: 'cola',
-						flow: {axis: 'y', minSeparation: 150},
-						avoidOverlaps: true,
-						maxSimulationTime: 5000,
-						//animate: false,
-						//infinite: true,
-						randomize: false,
-						unconstrIter: 10,
-						userConstIter: 2,
-						allConstIter: 2,
-//						edgeLength: 70,
-//						edgeJaccardLength: 170
-					 };
-				//layoutOpts = { name: 'cose', animate: true, refresh: 1, randomize: false };
-				var cy = cytoscape({
-					container: document.getElementById('cy'),
-					elements : [],
-					autolock: false,
-					autounselectify: false,
-					autoungrabify: false,
-					selectionType: 'single',
-					style: [ // the stylesheet for the graph
-					  	{ selector: '*',
-					  	  style: {
-					  		'min-zoomed-font-size' : '8'
-					  	  }
-					  	},
-					    {
-					      selector: 'node',
-					      style: {
-					        'background-color': '#f88',
-					        'background-opacity' : '0.5',
-					        'label': 'data(text)'
-					      }
-					    },
-					    {
-					      selector: 'node:selected',
-					      style: {
-					        'background-color': '#88f',
-					      }
-					    },
-					  	{ selector: '[?local]',
-					  	  style: {
-					        'background-opacity' : '1'
-					  	  }
-					  	},
-					    {
-					      selector: 'edge',
-					      style: {
-					        'width': 3,
-					        'curve-style': 'bezier',
-					        'line-color': '#ccc',
-					        'target-arrow-color': '#ccc',
-					        'target-arrow-shape': 'triangle-backcurve',
-					        'target-arrow-fill': 'hollow',
-					        'text-rotation': 'autorotate',
-					        'arrow-scale': 2,
-					        'label': 'data(text)'
-					      }
-					    }
-					  ], layout: {name: 'null'}});
-					  
-					  cy.on('layoutready', function(evt) {
-						console.log("LAYOUT READY");
-      				  });
-					  
-				      cy.on('layoutstop', function(evt) {
-						console.log("LAYOUT STOP");
-      				  });
-      	 
-      				  cy.on('layoutstart', function(evt) {
-      					console.log("LAYOUT START");
-      				  });
-				
-				//cy.startBatch();
-				data.forEach(function(ele,i,eles) {
-					cy.add(ele);
-				});
-				localNodes = cy.collection('[?local]');
-				remoteNodes = cy.collection('[!local]');
-				
-				remoteNodes.style('display','none');
-				remoteNodes.style('opacity',0.01);
-				
-				var layout = localNodes.layout(layoutOpts);
-				var grabHandler;
-				layout.pon('layoutstop').then(function(e){
-					console.log("laying out the rest");
-					localNodes.lock();
-					remoteNodes.style('display','element');
-					remoteNodes.animate({
-						style: {opacity: 1.0}
-						}, { duration: 4000});
-					layout = cy.layout(layoutOpts);
-					layout.run();
-					layout.pon('layoutstop').then(function(e){
-						console.log("done");
-						localNodes.unlock();
-						cy.on('grab free position', 'node', grabHandler);
-					});
-				});
-				console.log("laying out local nodes");
-				layout.run();
-				
-				cy.nodes().forEach(function(ele,i,eles) {
-					ele.data('text', getText(ele));
-				});
-				cy.edges().forEach(function(ele,i,eles) {
-					ele.data('text', ele.data('id').split("/").pop());
-				});
-				//cy.endBatch();
+canvas {
+	width: 100%;
+	height: 100%;
+}
 
-// handle node dragging
-	  var timer;
-      grabHandler = function(e){
-		var bb = layout.options.boundingBox || { x1: 0, y1: 0, w: cy.width(), h: cy.height() };
-      if( bb.x2 === undefined ){ bb.x2 = bb.x1 + bb.w; }
-      if( bb.w === undefined ){ bb.w = bb.x2 - bb.x1; }
-      if( bb.y2 === undefined ){ bb.y2 = bb.y1 + bb.h; }
-      if( bb.h === undefined ){ bb.h = bb.y2 - bb.y1; }
-      
-      	function setTimer() {
-              if(timer)
-        	clearTimeout(timer);
-        timer = setTimeout(function(){
-          if( !layout.manuallyStopped ){
-            layout.adaptor.stop();
-          }
-		}, layout.options.maxSimulationTime);
-      	}
-              var node = this;
-        var scrCola = node.scratch().cola;
-        var pos = node.position();
-        var nodeIsTarget = e.cyTarget === node || e.target === node;
+#cy {
+	width: 100%;
+	height: 100%;
+}
 
-        if( !nodeIsTarget ){ return; }
+.literal {
+	font-family: Courier;
+}
 
-        switch( e.type ){
-          case 'grab':
-			console.log("Grabbing node " + node.data('id'));
-            layout.adaptor.dragstart( scrCola );
-            layout.adaptor.resume();
-            setTimer();
-            break;
-          case 'free':
-			console.log("Freeing node " + node.data('id'));
-            layout.adaptor.dragend( scrCola );
-            setTimer();
-            break;
-          case 'position':
-            // only update when different (i.e. manual .position() call or drag) so we don't loop needlessly
-            if( scrCola.px !== pos.x - bb.x1 || scrCola.py !== pos.y - bb.y1 ){
-              scrCola.px = pos.x - bb.x1;
-              scrCola.py = pos.y - bb.y1;
-              layout.adaptor.resume();
-            }
-            break;
-        }
-      };
-      
-      
-	
-				window.cy = cy;
-				window.layout = layout;
-				window.layoutOpts = layoutOpts;
-				
-            }
-            
-            function getText(ele) {
-            	switch(ele.data('type')) {
-            	case 'integer':
-            		return ele.data('intValue');
-            	case 'cardinal':
-            		return ele.data('intValue');
-            	case 'ordinal':
-            		return ele.data('intValue');
-            	case 'rational':
-            		return ele.data('value');
-            	case 'character':
-            		return ele.data('strValue');
-            	case 'string':
-            		return ele.data('strValue');
-            	case 'identity':
-            	default:
-            		return ele.data('id').split("/").pop();
-            	}
-            }
-        </script>
-        <style type='text/css'>
-            body {
-                height: 100%;
-                width: 100%;
-                position: absolute;
-                overflow: hidden;
-            }
-            canvas {
-                width: 100%;
-                height: 100%;
-            }
-            #cy {
-                width: 100%;
-                height: 100%;
-             //   fill: #fff;
-            }
-            .literal { font-family: Courier; }
-            .iterStar:after { content: "*"; }
-            .iterPlus { font-style: italic; text: "+";}
-            .iterPlus:after { content: "+"; }
-            
-        </style>
-    </head>
-    <body style="background-color: rgba(235,235,235,1);">
-	<div id="cy"></div>
+.iterStar:after {
+	content: "*";
+}
+
+.iterPlus {
+	font-style: italic;
+	text: "+";
+}
+
+.iterPlus:after {
+	content: "+";
+}
+#header {
+	height: 2em;
+	width: 100%;
+	position: absolute;
+	top: 0px;
+	left: 0px;
+	background-color: black;
+	color: white;
+	}
+#title {
+	padding: 2px;
+	font-size: 24px;
+	height: 100%;
+	float: left;
+}
+#status {
+	padding: 2px;
+	font-size: 24px;
+	height: 100%;
+	width: 80%;
+	float: right;
+	margin-right: 24px;
+	text-align: right;
+}
+#main, #left, #right {
+
+	margin-top: calc(2em + 0px);
+	margin-bottom: calc(0em + 0px);
+	height: calc(100% - 2em - 4px);
+	border: 0px solid #333;
+}
+#main {
+	position: absolute;
+	left: 10%;
+	background-color: #eee;
+	width: calc(65% - 4px);
+	border-width: 2px;
+	z-index: 1;
+}
+#left {
+	left: 0px;
+	position: absolute;
+	width: calc(10% - 0px);
+	background-color: #ddd;
+	border-width: 2px 0px 2px 0px;
+}
+#right {
+	right: 0px;
+	position: absolute;
+	width: calc(25% - 0px);
+	background-color: #ddd;
+	border-width: 2px 0px 2px 0px;
+}
+#bottom {
+	bottom: 0px;
+	left: 0px;
+	position: absolute;
+	width: 100%;
+	height: 6em;
+	background-color: #ddd;
+}
+#cy_control_panel {
+	float: right;
+/*	width: 0px;
+	height: 0px;
+	margin-right: calc(15em + 4px);*/
+	z-index: 10;
+}
+#cy_control_panel div {
+	padding: 2px;
+/*	width: 15em;*/
+	background-color: #ddd;
+	opacity: 0.7;
+}
+</style>
+</head>
+<body style="background-color: rgba(235, 235, 235, 1);">
+	<div id="header">
+		<div id="title">GrEx</div>
+		<div id="status">OK</div>
+	</div>
+	<div id="main">
+		<div id="cy_control_panel">
+		</div>
+		<div id="cy"></div>
+	</div>
+	<div id="left">
+		<div>
+			<ul>
+			<li><a onClick="cy.fit()" accesskey="f" href="javascript:void(0)">Fit to screen</a>
+			<li><a onClick="cy.zoom(cy.zoom()+0.03)" accesskey="+" href="javascript:void(0)">Zoom in</a>
+			<li><a onClick="cy.zoom(cy.zoom()-0.03)" accesskey="-" href="javascript:void(0)">Zoom out</a>
+			</ul>
+				</div>
+	</div>
+	<div id="right"></div>
+	<div id="bottom"></div>
 	<div id="datadump"></div>
-    </body>
+</body>
 </html>

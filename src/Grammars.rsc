@@ -12,7 +12,11 @@ import Triples;
 
 alias SymTable = map[Symbol,Id];
 
+public Graph metaGraph = newGraph("metaGraph");
+public Id STRUCTURAL = newId(metaGraph, "structural");
+
 public Graph metaGrammar = newGraph("metaGrammar");
+	
 public Id SORT = newId(metaGrammar, "sort");
 public Id START = newId(metaGrammar, "start");
 public Id CF_SORT = newId(metaGrammar, "cfSort");
@@ -40,6 +44,7 @@ public Id SOURCE = newId(metaGrammar, "source");
 public Id STRING_VALUE = newId(metaGrammar, "stringValue");
 public Id ELEMENT = newId(metaGrammar, "element");
 
+
 Id nextId(this(), int childNum) = ident(".<childNum>");
 Id nextId(ident(parent, old), int childNum) = ident(parent, "<old>.<childNum>");
 Id nextId(ident(old), int childNum) = ident("<old>.<childNum>");
@@ -57,6 +62,9 @@ public tuple[Graph,map[Production,loc]] loadGrammar(loc grammarModule) {
 
 public Graph grammarToGraph(Grammar gr, str name) {
 	Graph g = newGraph(name);
+	g += <SORT,IS,STRUCTURAL>;
+	g += <ELEMENT,IS,STRUCTURAL>;
+	
 	
 	SymTable symTable = ();
 	id = this();
@@ -73,7 +81,7 @@ public Graph grammarToGraph(Grammar gr, str name) {
 		<childId, symTable> = symToId(s, childId, symTable);
 		g += <this(), SORT, childId>;
 
-		println("<s>: <gr.rules[s]>");
+//		println("<s>: <gr.rules[s]>");
 		<g,symTable> = prodToGraph(gr.rules[s], childId, g, symTable);
 		i += 1;
 	}
@@ -117,6 +125,7 @@ public tuple[Graph,SymTable] symToGraph(S:alt(alts), Id id, Graph g, SymTable sy
 public tuple[Graph,SymTable] symToGraph(S:seq(syms), Id id, Graph g, SymTable symTable) {
 	g += <id, CONFORMS_TO, SYMBOL>;
 	g += <id, IS, SEQ_SYM>;
+	g += <id, IS, STRUCTURAL>;
 	int i = 0;
 	for(p <- syms) {
 		childId = nextId(id, i);

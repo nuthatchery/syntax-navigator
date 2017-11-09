@@ -5,11 +5,15 @@ import String;
 loc libraryPath = |project://syntax-navigator/libs|;
 
 map[str,loc] dependencies =
-	("cytoscape.js" : |https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.2.5/cytoscape.js|,
+	("jquery-3.2.1.min.js" : |https://code.jquery.com/jquery-3.2.1.min.js|,
+	"cytoscape.js" : |https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.2.5/cytoscape.js|,
 	"cytoscape.min.js" : |https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.2.5/cytoscape.min.js|,
 	"cola.v3.js" : |http://marvl.infotech.monash.edu/webcola/cola.v3.js|,
 	"cola.v3.min.js" : |http://marvl.infotech.monash.edu/webcola/cola.v3.min.js|,
 	"cytoscape-cola.js" : |https://raw.githubusercontent.com/cytoscape/cytoscape.js-cola/master/cytoscape-cola.js|,
+	"codemirror.js" : |https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.31.0/codemirror.js|,
+	"codemirror.min.js" : |https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.31.0/codemirror.min.js|,
+	"codemirror.css" : |https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.31.0/codemirror.css|,
 	"vivagraph.js" : |https://raw.githubusercontent.com/anvaka/VivaGraphJS/master/dist/vivagraph.js|,
 	"vivagraph.min.js" : |https://raw.githubusercontent.com/anvaka/VivaGraphJS/master/dist/vivagraph.min.js|
 	);

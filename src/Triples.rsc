@@ -49,6 +49,21 @@ public Id Id(loc u) = uri(u);
 
 alias Graph = rel[Id,Id,Id];
 
+Id valueOwner(str s) = ident(ident(root(), "values"), s);
+public Id ownerOf(integer(x)) = valueOwner("integers");
+public Id ownerOf(character(x)) = valueOwner("characters");
+public Id ownerOf(cardinal(n,x)) = valueOwner("cardinals");
+public Id ownerOf(ordinal(n,x)) = valueOwner("ordinals");
+public Id ownerOf(rational(x)) = valueOwner("rationals");
+public Id ownerOf(string(x)) = valueOwner("strings");
+public Id ownerOf(root()) = root();
+public Id ownerOf(uri(x)) = valueOwner("uris");
+public Id ownerOf(ident(root(), x)) = root();
+public Id ownerOf(ident(p:ident(root(),_), x)) = p;
+public Id ownerOf(ident(parent, x)) = ownerOf(parent);
+public Id ownerOf(this()) = this();
+public Id ownerOf(ident(x)) = this();
+
 public Id qualify(Id domain, Id base, Id i) = top-down visit(i) {
 	case this() => base
 	case ident(name) => ident(domain, name)
@@ -60,6 +75,7 @@ public Id IDENTITY = ident(MODELLING_ID, "identity");
 public Id NAME = ident(MODELLING_ID, "name");
 public Id IS = ident(MODELLING_ID, "is");
 public Id HAS = ident(MODELLING_ID, "has");
+public Id PART_OF = ident(MODELLING_ID, "partOf");
 public Id ONE_OF = ident(MODELLING_ID, "oneOf"); // xor
 public Id ANY_OF = ident(MODELLING_ID, "anyOf"); // or
 public Id ALL_OF = ident(MODELLING_ID, "allOf"); // and
@@ -211,6 +227,9 @@ public Id fromUri(loc u) {
 }
 
 str obj(str key, str val) = "{\"type\":\"<key>\", \"value\":\"<escape(val)>\"}";
+str jsonObj(map[str,str] obj) = "{<intercalate(", ", ["\"<escape(k)>\":<obj[k]>" | k <- obj])>}";
+str jsonObj(list[str] obj) = "[<intercalate(", ", [k | k <- obj])>]";
+str jsonStr(str obj) = "\"<escape(obj)>\"";
 public str toJson(uri(x)) = obj("uri", locToStr(x));
 public str toJson(character(x)) = obj("character", escape(stringChar(x)));
 public str toJson(integer(x)) = "{\"type\":\"integer\", \"value\":<x>}";
@@ -245,6 +264,61 @@ public str toJson(Graph g) {
 	}
  	return "{\n<intercalate(",\n", r)>\n}\n";
 }
+
+public str toCyto(Id id) = jsonObj(toCytoMap(id));
+public map[str,str] toCytoMap(I:uri(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("uri"), "uri":jsonStr(locToStr(x))));
+public map[str,str] toCytoMap(I:character(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("character"), "intValue":"<x>", "strValue":jsonStr(stringChar(x))));
+public map[str,str] toCytoMap(I:integer(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("integer"), "intValue":"<x>"));
+public map[str,str] toCytoMap(I:cardinal(n,x)) = (("id":jsonStr(toString(I)), "type":jsonStr("cardinal"), "name":jsonStr(n), "intValue":"<x>"));
+public map[str,str] toCytoMap(I:ordinal(n,x)) = (("id":jsonStr(toString(I)), "type":jsonStr("ordinal"), "name":jsonStr(n), "intValue":"<x>"));
+public map[str,str] toCytoMap(I:rational(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("rational"), "value":"[<numerator(x)>,<denominator(x)>]"));
+public map[str,str] toCytoMap(I:string(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("string"), "strValue":jsonStr(x)));
+public map[str,str] toCytoMap(I:ident(p,x)) = (("id":jsonStr(toString(I)), "type":jsonStr("identity")));
+public map[str,str] toCytoMap(I:ident(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("identity")));
+public map[str,str] toCytoMap(I:root()) = (("id":jsonStr(toString(I)), "type":jsonStr("identity")));
+public map[str,str] toCytoMap(I:this()) = (("id":jsonStr(toString(I)), "type":jsonStr("identity")));
+//public map[str,str] toCytoMap(<Id f, Id l, Id t>) = "{\"<toString(f)>\" : {\"<toString(l)>\":<toCytoMap(t)>}}";
+//public map[str,str] toCytoMap(<Id l, Id t>) = "\"<toString(l)>\" : <toCytoMap(t)>";
+public str toCyto(Graph g, set[Id] unlink = {}) {
+	list[str] r;
+	list[str] vals;
+	set[Id] nodes = g<0>;
+	r = for(k <- nodes) {
+		s = toString(k);
+		map[str,str] cm = toCytoMap(k);
+		cm["local"] = "true";
+		cm["owner"] = jsonStr(toString(ownerOf(k)));
+		for(l <- g[k]<0>) {
+			cm[toString(l)] = "[<intercalate(", ", [jsonStr(toString(t)) | t <- g[k][l]])>]";
+		}
+		append jsonObj(("group":jsonStr("nodes"), "data":jsonObj(cm)));
+	}
+	g = {<f,l,t> | <f,l,t> <- g, l notin unlink};
+	set[Id] targets = g<2>;
+	set[Id] labels = g<1>;
+	r += for(k <- targets) {
+		if(k notin nodes) {
+			map[str,str] cm = toCytoMap(k);
+			cm["local"] = "false";
+			cm["owner"] = jsonStr(toString(ownerOf(k)));
+			append jsonObj(("group":jsonStr("nodes"), "data":jsonObj(cm)));
+		}
+	}
+	r += for(<f,l,t> <- g) {
+		<fStr,lStr,tStr> = <toString(f),toString(l),toString(t)>;
+		map[str,str] cm = toCytoMap(l);
+		cm["id"] = jsonStr("<fStr>–<lStr>→<tStr>");
+		cm["label"] = jsonStr(lStr);
+		cm["source"] = jsonStr(fStr);
+		cm["target"] = jsonStr(tStr);
+		cm["local"] = t in nodes ? "true" : "false";
+		cm["owner"] = jsonStr(toString(ownerOf(l)));
+		append jsonObj(("group":jsonStr("edges"), "data":jsonObj(cm)));
+	}
+ 	return "[\n<intercalate(",\n", r)>\n]\n";
+}
+
+
 
 public Graph qualifyGraph(Graph g) = qualifyGraph(g, getOne(g, this(), IDENTITY));
 

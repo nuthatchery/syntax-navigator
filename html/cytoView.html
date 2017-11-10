@@ -4,12 +4,13 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <title>Grammar Viewer</title>
 <link rel="stylesheet" href="/js/codemirror.css">
-<script src="/js/cytoscape.js"></script>
 <script src="/js/cola.v3.min.js"></script>
+<script src="/js/cytoscape.min.js"></script>
 <script src="/js/cytoscape-cola.js"></script>
 <script src="/js/jquery-3.2.1.min.js"></script>
 <script src="/js/codemirror.min.js"></script>
 <script type='text/javascript'>
+	//cycola(cytoscape, window.cola);
 	var cy;
 	$(function() {
 		var args = getUrlVars();
@@ -256,7 +257,7 @@
 		localNodes = cy.collection('[?local]');
 		remoteNodes = cy.collection('[!local]');
 
-		var layout = cy.layout($.extend(layoutOpts, {
+		var layout = window.layout = cy.layout($.extend(layoutOpts, {
 			edgeFilter : function(edge) {
 				return edge.data('structural');
 			}, //  || edge.data('owner') || edge.data('label') == '/metaGrammar/source'; },

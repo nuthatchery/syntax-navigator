@@ -8,7 +8,7 @@ map[str,loc] dependencies =
 	("jquery-3.2.1.min.js" : |https://code.jquery.com/jquery-3.2.1.min.js|,
 	"cytoscape.js" : |https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.2.5/cytoscape.js|,
 	"cytoscape.min.js" : |https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.2.5/cytoscape.min.js|,
-	"cola.v3.js" : |http://marvl.infotech.monash.edu/webcola/cola.v3.js|,
+	//"cola.v3.js" : |http://marvl.infotech.monash.edu/webcola/cola.v3.js|,
 	"cola.v3.min.js" : |http://marvl.infotech.monash.edu/webcola/cola.v3.min.js|,
 	"cola.v3.min.js.map" : |http://marvl.infotech.monash.edu/webcola/cola.v3.min.js.map|,
 	"cytoscape-cola.js" : |https://raw.githubusercontent.com/cytoscape/cytoscape.js-cola/master/cytoscape-cola.js|,

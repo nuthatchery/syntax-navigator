@@ -29,10 +29,10 @@
 			url : '/api/v1' + graph + query,
 			success : viewGraph
 		});
-		
-		var myCodeMirror = CodeMirror(document.getElementById('right'), {
-			  value: "function myScript(){return 100;}\n",
-			  //mode:  "javascript"
+
+		var myCodeMirror = CodeMirror(document.getElementById('editor'), {
+			value : "function myScript(){return 100;}\n",
+		//mode:  "javascript"
 		});
 	});
 	// Read a page's GET URL variables and return them as an associative array.
@@ -54,8 +54,8 @@
 		var layoutOpts = {
 			name : 'cola',
 			flow : {
-				axis : 'y',
-				minSeparation : 150
+				axis : 'x',
+				minSeparation : 75
 			},
 			avoidOverlaps : true,
 			maxSimulationTime : 1000,
@@ -88,8 +88,11 @@
 				selector : 'node',
 				style : {
 					'background-color' : '#f88',
-					'background-opacity' : '0.5',
+					'text-outline-color' : '#f88',
+					'text-outline-width' : 1.0,
 					'label' : 'data(text)',
+					'text-halign' : 'center',
+					'text-valign' : 'center'
 				}
 			}, {
 				selector : 'node:selected',
@@ -118,7 +121,7 @@
 			}, {
 				selector : '[label="/modelling/is"]',
 				style : {
-					'display' : 'none'
+				//'display' : 'none'
 				}
 			}, {
 				selector : '[?local]',
@@ -130,20 +133,36 @@
 				style : {
 					'width' : 2,
 					'curve-style' : 'bezier',
-					'color' : '#666',
+					'color' : '#333',
 					'line-color' : '#ccc',
+					'text-outline-color' : '#eee',
+					'text-outline-opacity' : 1.0,
+					'text-outline-width' : 1.0,
 					'target-arrow-color' : '#ccc',
 					'target-arrow-shape' : 'triangle',
 					'target-arrow-fill' : 'filled',
 					'text-rotation' : 'autorotate',
 					'arrow-scale' : 1,
-					'label' : 'data(text)'
+					'label' : 'data(text)',
+					'ghost' : 'yes',
 				}
 			}, {
 				selector : 'edge[?structural]',
 				style : {
-					'line-color' : '#f00',
+					'line-color' : '#d66',
+					'target-arrow-color' : '#d66',
+					'text-outline-color' : '#fcc',
 					'width' : 5,
+					'z-index' : 150,
+				}
+			}, {
+				selector : '[label="/metaGrammar/next"]',
+				style : {
+					'line-color' : '#6d6',
+					'target-arrow-color' : '#6d6',
+					'text-outline-color' : '#fcc',
+					'width' : 7,
+					'z-index' : 150,
 				}
 			}, {
 				selector : 'node.owner',
@@ -181,6 +200,19 @@
 		});
 
 		cy.on('tap', function(evt) {
+			element = evt.target;
+			if (element.data()) {
+				var s;
+				if (element.isNode()) {
+					s = '<h1>Node Info</h1>';
+				} else {
+					s = '<h1>Edge Info</h1>';
+				}
+				s += '<p>' + JSON.stringify(element.data()) + '</p>';
+				s += '<p>' + JSON.stringify(evt.target._private.classes)
+						+ '</p>';
+				$('#info').html(s);
+			}
 			console.log("Element: " + JSON.stringify(evt.target.data()));
 			console.log("  style classes: "
 					+ JSON.stringify(evt.target._private.classes));
@@ -254,41 +286,45 @@
 		//cy.nodes().forEach(function(ele,i,eles) {
 		//	console.log(ele);
 		//});
-		localNodes = cy.collection('[?local]');
-		remoteNodes = cy.collection('[!local]');
+		locals = cy.edges('[?local]');
+		locals = locals.union(locals.connectedNodes());
+		remoteNodes = cy.collection() - locals;
 
 		var layout = window.layout = cy.layout($.extend(layoutOpts, {
 			edgeFilter : function(edge) {
-				return edge.data('structural');
+				return edge.data('label') == '/metaGrammar/next'; // edge.data('structural');
 			}, //  || edge.data('owner') || edge.data('label') == '/metaGrammar/source'; },
-			//					edgeFilter: function(edge) { return edge.data('label').match(/element/);  },
-			//					edgeLength: function(edge) { return edge.data('label') == '/metaGrammar/source' ? 350 : 150; },
+		//					edgeFilter: function(edge) { return edge.data('label').match(/element/);  },
+		//					edgeLength: function(edge) { return edge.data('label') == '/metaGrammar/source' ? 350 : 150; },
 		}));
-		var layoutAll = cy.layout($.extend(layoutOpts, {	
+		var layoutAll = cy.layout($.extend(layoutOpts, {
 			unconstrIter : 0,
 			userConstIter : 0,
 			allConstIter : 0,
-			refresh: 1,
+			refresh : 1,
 		}));
 		var grabHandler;
 		layout.pon('layoutstop').then(function(e) {
 			//console.log("laying out the rest");
-			localNodes.lock();
+			locals.lock();
 			//remoteNodes.style('display','element');
 			//remoteNodes.animate({style: {'opacity': 0.7}}, { duration: 1000});
 			layoutAll.run();
-			layoutAll.pon('layoutstop').then(function(e){
+			layoutAll.pon('layoutstop').then(function(e) {
 				console.log("fixing other nodes");
-				localNodes.unlock();
+				locals.unlock();
 				layout = cy.layout($.extend(layoutOpts, {
-					unconstrIter : 0, userConstIter : 0, allConstIter : 0, fit: false,
-					maxSimulationTime: 3000,
+					unconstrIter : 0,
+					userConstIter : 0,
+					allConstIter : 0,
+					fit : false,
+					maxSimulationTime : 3000,
 					edgeFilter : function(edge) {
-						return edge.data('structural');
+						return edge.data('label') == '/metaGrammar/next';//edge.data('structural');
 					}, //  || edge.data('owner') || edge.data('label') == '/metaGrammar/source'; },
-			}));
-					layout.run();
-				layout.pon('layoutstop').then(function(e){
+				}));
+				layout.run();
+				layout.pon('layoutstop').then(function(e) {
 					console.log("done");
 					cy.on('grab free position', 'node', grabHandler);
 				});
@@ -300,15 +336,15 @@
 			cy.fit();
 		});
 		console.log("laying out local nodes");
-		
+
 		cy.on('layoutstart', function(e) {
 			$('#status').html("Laying out nodes");
 		});
 		cy.on('layoutstop', function(e) {
-			if($('#status').text() == "Laying out nodes")
+			if ($('#status').text() == "Laying out nodes")
 				$('#status').html("OK");
 		});
-		
+
 		cy.fit();
 		layout.run();
 
@@ -387,8 +423,12 @@
 	function getText(ele) {
 		if (ele.data('/metaGrammar/stringValue'))
 			return ele.data('/metaGrammar/stringValue')[0];
-		if (ele.data('/modelling/name'))
-			return ele.data('/modelling/name')[0];
+		if (ele.data('/modelling/name')) {
+			name = ele.data('/modelling/name');
+			if (name.startsWith("\"") && name.endsWith("\""))
+				name = name.slice(1, -1);
+			return name;
+		}
 		switch (ele.data('type')) {
 		case 'integer':
 			return ele.data('intValue');
@@ -444,6 +484,7 @@ canvas {
 .iterPlus:after {
 	content: "+";
 }
+
 #header {
 	height: 2em;
 	width: 100%;
@@ -452,13 +493,15 @@ canvas {
 	left: 0px;
 	background-color: black;
 	color: white;
-	}
+}
+
 #title {
 	padding: 2px;
 	font-size: 24px;
 	height: 100%;
 	float: left;
 }
+
 #status {
 	padding: 2px;
 	font-size: 24px;
@@ -468,13 +511,18 @@ canvas {
 	margin-right: 24px;
 	text-align: right;
 }
-#main, #left, #right {
 
+#main, #left, #right {
 	margin-top: calc(2em + 0px);
 	margin-bottom: calc(0em + 0px);
 	height: calc(100% - 2em - 4px);
 	border: 0px solid #333;
 }
+
+#main div, #left div, #right div { //
+	margin: 0px;
+}
+
 #main {
 	position: absolute;
 	left: 10%;
@@ -483,6 +531,7 @@ canvas {
 	border-width: 2px;
 	z-index: 1;
 }
+
 #left {
 	left: 0px;
 	position: absolute;
@@ -490,6 +539,7 @@ canvas {
 	background-color: #ddd;
 	border-width: 2px 0px 2px 0px;
 }
+
 #right {
 	right: 0px;
 	position: absolute;
@@ -497,6 +547,7 @@ canvas {
 	background-color: #ddd;
 	border-width: 2px 0px 2px 0px;
 }
+
 #bottom {
 	bottom: 0px;
 	left: 0px;
@@ -505,16 +556,18 @@ canvas {
 	height: 6em;
 	background-color: #ddd;
 }
+
 #cy_control_panel {
 	float: right;
-/*	width: 0px;
+	/*	width: 0px;
 	height: 0px;
 	margin-right: calc(15em + 4px);*/
 	z-index: 10;
 }
+
 #cy_control_panel div {
 	padding: 2px;
-/*	width: 15em;*/
+	/*	width: 15em;*/
 	background-color: #ddd;
 	opacity: 0.7;
 }
@@ -526,21 +579,28 @@ canvas {
 		<div id="status">OK</div>
 	</div>
 	<div id="main">
-		<div id="cy_control_panel">
-		</div>
+		<div id="cy_control_panel"></div>
 		<div id="cy"></div>
 	</div>
 	<div id="left">
 		<div>
 			<ul>
-			<li><a onClick="cy.fit()" accesskey="f" href="javascript:void(0)">Fit to screen</a>
-			<li><a onClick="cy.zoom(cy.zoom()+0.03)" accesskey="+" href="javascript:void(0)">Zoom in</a>
-			<li><a onClick="cy.zoom(cy.zoom()-0.03)" accesskey="-" href="javascript:void(0)">Zoom out</a>
+				<li><a onClick="cy.fit()" accesskey="f"
+					href="javascript:void(0)">Fit to screen</a>
+				<li><a onClick="cy.zoom(cy.zoom()+0.03)" accesskey="+"
+					href="javascript:void(0)">Zoom in</a>
+				<li><a onClick="cy.zoom(cy.zoom()-0.03)" accesskey="-"
+					href="javascript:void(0)">Zoom out</a>
 			</ul>
-				</div>
+		</div>
 	</div>
-	<div id="right"></div>
-	<div id="bottom"></div>
+	<div id="right">
+		<div id="editor"></div>
+		<div id="info"></div>
+	</div>
+	<div id="bottom">
+		<div id="console"></div>
+	</div>
 	<div id="datadump"></div>
 </body>
 </html>

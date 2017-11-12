@@ -189,11 +189,16 @@ public bool(tuple[Id,Id,Id]) makeFilter((TripleQuery)`and(<{TripleQuery ","}* qs
 }
 public bool(tuple[Id,Id,Id]) makeFilter((TripleQuery)`or(<{TripleQuery ","}* qs>)`) {
 	fs = [makeFilter(q) | q <- qs];
-	return bool(tuple[Id,Id,Id] t) {
-		for(f <- fs)
-			if(f(t)) return true;
-		return false;
-	};
+	if(fs == []) {
+		return bool(tuple[Id,Id,Id] t) { return true; };
+	}
+	else {
+		return bool(tuple[Id,Id,Id] t) {
+			for(f <- fs)
+				if(f(t)) return true;
+			return false;
+		};
+	}
 }
 
 public bool(tuple[Id,Id,Id]) makeFilter((TripleQuery)`not(<TripleQuery q>)`) {

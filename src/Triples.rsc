@@ -311,7 +311,7 @@ public str toCyto(Graph g, set[Id] unlink = {}) {
 		cm["label"] = jsonStr(lStr);
 		cm["source"] = jsonStr(fStr);
 		cm["target"] = jsonStr(tStr);
-		cm["local"] = t in nodes ? "true" : "false";
+		cm["local"] = f in nodes && t in nodes ? "true" : "false";
 		cm["owner"] = jsonStr(toString(ownerOf(l)));
 		append jsonObj(("group":jsonStr("edges"), "data":jsonObj(cm)));
 	}

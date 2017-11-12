@@ -9,6 +9,8 @@
 <script src="/js/cytoscape-cola.js"></script>
 <script src="/js/jquery-3.2.1.min.js"></script>
 <script src="/js/codemirror.min.js"></script>
+<script src="/js/animation.js"></script>
+<script src="/js/graph.js"></script>
 <script type='text/javascript'>
 	//cycola(cytoscape, window.cola);
 	var cy;
@@ -30,10 +32,11 @@
 			success : viewGraph
 		});
 
-		var myCodeMirror = CodeMirror(document.getElementById('editor'), {
-			value : "function myScript(){return 100;}\n",
-		//mode:  "javascript"
-		});
+		var myCodeMirror = CodeMirror(document.getElementById('editorcontrol'),
+				{
+					value : "function myScript(){return 100;}\n",
+				//mode:  "javascript"
+				});
 	});
 	// Read a page's GET URL variables and return them as an associative array.
 	// from: http://jquery-howto.blogspot.no/2009/09/get-url-parameters-values-with-jquery.html
@@ -49,14 +52,71 @@
 		//}
 		return vars;
 	}
+	function makeTreeConstraints(eles, roots, edgeFilter, axis, gap) {
+		var todo = [];
+		var seen = {};
+		var constraints = [];
+
+		roots.forEach(function(r) {
+			if (r.isNode())
+				todo.push(r);
+		});
+
+		while (todo.length > 0) {
+			n = todo.shift();
+			seen[n.data('id')] = true;
+			var orderedElems = [];
+			n.outgoers().forEach(
+				function(e) {
+					if (edgeFilter(e)) {
+						target = e.target();
+						if(e.data('type') == 'ordinal') {
+							//console.log("order: " + e.data('intValue') + ": " + target.data('id'));
+							orderedElems[e.data('intValue')] = target;
+						}
+						//console.log("New constraint: " + axis + " "
+						//		+ n.data('id') + " → " + target.data('id')
+						//		+ " gap " + gap);
+						constraints.push({
+							'axis' : axis,
+							'left' : n,
+							'right' : target,
+							'gap' : gap
+						});
+						if (!seen[target.data('id')]) {
+							todo.push(target);
+						}
+					}
+				});
+			if(orderedElems.length > 1) {
+				var last = undefined;
+				$.each(orderedElems, function(e) {
+					e = orderedElems[e];
+					if(last != undefined) {
+						//console.log("order: " + last.data('id') + " left of " + e.data('id'));
+						constraints.push({
+							'axis' : axis == 'x' ? 'y' : 'x',
+							'left' : last,
+							'right' : e,
+							'gap' : gap
+						});
+					}
+					last = e;	
+				});
+			}
+		}
+
+		return constraints;
+	}
 
 	function viewGraph(data) {
+		$('#status').html("Processing graph...");
 		var layoutOpts = {
 			name : 'cola',
-			flow : {
-				axis : 'x',
-				minSeparation : 75
-			},
+			//flow : {
+			//	axis : 'x',
+			//	minSeparation : 75
+			//},
 			avoidOverlaps : true,
 			maxSimulationTime : 1000,
 			//animate: false,
@@ -87,12 +147,18 @@
 			}, {
 				selector : 'node',
 				style : {
-					'background-color' : '#f88',
-					'text-outline-color' : '#f88',
+					'background-color' : '#ccc',
+					'text-outline-color' : '#ccc',
 					'text-outline-width' : 1.0,
 					'label' : 'data(text)',
 					'text-halign' : 'center',
 					'text-valign' : 'center'
+				}
+			}, {
+				selector : 'node[?local]',
+				style : {
+					'background-color' : '#daa',
+					'text-outline-color' : '#daa',
 				}
 			}, {
 				selector : 'node:selected',
@@ -181,9 +247,19 @@
 					'opacity' : 1,
 					'z-index' : 0
 				}
-			}, ],
+			}, {
+				selector : 'edge.highlight',
+				style : {
+					'width' : 10
+				}
+			}, {
+				selector : 'node.highlight',
+				style : {
+					'background-color' : '#f00'
+				}
+			} ],
 			layout : {
-				name : 'null'
+				name : 'random'
 			}
 		});
 
@@ -202,90 +278,59 @@
 		cy.on('tap', function(evt) {
 			element = evt.target;
 			if (element.data()) {
-				var s;
+				var s = $('<div></div>');
 				if (element.isNode()) {
-					s = '<h1>Node Info</h1>';
+					s.append('<h1>Node Info</h1>');
 				} else {
-					s = '<h1>Edge Info</h1>';
+					s.append('<h1>Edge Info</h1>');
 				}
-				s += '<p>' + JSON.stringify(element.data()) + '</p>';
-				s += '<p>' + JSON.stringify(evt.target._private.classes)
-						+ '</p>';
+				var list = $('<ul></ul>');
+				$.each(evt.target.data(), function(keyName, val) {
+					var item = $('<li></li>');
+					var n = cy.$id(keyName);
+					var text = n.data('text') ? n.data('text') : keyName;
+					var key = $('<a>' + text + '</a>');
+					var val = $('<a>' + val + '</a>');
+					//					if(n.data('id')) {
+					var edges = cy.edges('[label="' + keyName + '"]');
+					var selected = edges.union(n);
+					key.on('mouseenter', function(event) {
+						highlightElements(selected);
+					});
+					key.on('mouseleave', function(event) {
+						unhighlightElements(selected);
+					});
+					key.on('click', function(event) {
+						centerOnElements(selected);
+					});
+					key.on('dblclick', function(event) {
+						zoomToElements(selected);
+					});
+
+					//				}
+					item.append(key);
+					item.append(': ');
+					item.append(val);
+					list.append(item);
+				});
+				st = "<li><b>Style</b>: ";
+				$.each(evt.target._private.classes._obj, function(key, val) {
+					st += key + ": " + val + ", ";
+				});
+				list.append(st);
+				s.append(list);
 				$('#info').html(s);
 			}
-			console.log("Element: " + JSON.stringify(evt.target.data()));
-			console.log("  style classes: "
-					+ JSON.stringify(evt.target._private.classes));
 		});
 
-		//cy.startBatch();
-		var newElements = [];
-		data.forEach(function(ele, i, eles) {
-			o = cy.add(ele);
-			newElements.push(o);
-		});
-		newElements.forEach(function(o, i, eles) {
-			o.addClass(o.data('owner'));
-			cy.add([ {
-				group : "nodes",
-				data : {
-					id : "__" + o.data('owner') + "__",
-					text : o.data('owner')
-				},
-				classes : "owner"
-			}, {
-				group : "edges",
-				data : {
-					source : o.id(),
-					target : "__" + o.data('owner') + "__"
-				},
-				classes : "owner"
-			} ]);
-			o.style('opacity', 0.01);
-			if (o.data('label')) {
-				o.data('text', o.data('label').split("/").pop());
-				desc = cy.$id(o.data('label'));
-				if (desc
-						&& desc.edgesTo(cy.$id('/metaGraph/structural')).is(
-								'[label="/modelling/is"]')) {
-					o.data('structural', true);
-				} else if (o.data('type') == 'ordinal'
-						&& o.source().data('structural')) {
-					o.data('structural', true);
-				}
-			} else {
-				if (o.edgesTo(cy.$id('/metaGraph/structural')).is(
-						'[label="/modelling/is"]')) {
-					o.data('structural', true);
-				}
-				o.data('text', getText(o));
-			}
-			if (o.data('local')) {
-				o.animate({
-					style : {
-						'opacity' : 1.0
-					}
-				}, {
-					duration : 500
-				});
-			} else {
-				o.animate({
-					style : {
-						'opacity' : 1.0
-					}
-				}, {
-					duration : 5000
-				});
-			}
-		});
+		addElementsFromJson(data);
 
-		cy.edges('[label="/modelling/conformsTo"]').forEach(
-				function(ele, i, eles) {
-					ele.source().addClass(ele.target().data('id'));
-				});
-		//cy.nodes().forEach(function(ele,i,eles) {
-		//	console.log(ele);
-		//});
+		var edgeFilter = function(edge) {
+			return edge.data('label') == '/metaGrammar/sort'
+					|| edge.data('label') == '/metaGrammar/next'
+					|| edge.data('structural');
+		}
+
 		locals = cy.edges('[?local]');
 		locals = locals.union(locals.connectedNodes());
 		remoteNodes = cy.collection() - locals;
@@ -305,43 +350,18 @@
 		}));
 		var grabHandler;
 		layout.pon('layoutstop').then(function(e) {
-			//console.log("laying out the rest");
-			locals.lock();
-			//remoteNodes.style('display','element');
-			//remoteNodes.animate({style: {'opacity': 0.7}}, { duration: 1000});
-			layoutAll.run();
-			layoutAll.pon('layoutstop').then(function(e) {
-				console.log("fixing other nodes");
-				locals.unlock();
-				layout = cy.layout($.extend(layoutOpts, {
-					unconstrIter : 0,
-					userConstIter : 0,
-					allConstIter : 0,
-					fit : false,
-					maxSimulationTime : 3000,
-					edgeFilter : function(edge) {
-						return edge.data('label') == '/metaGrammar/next';//edge.data('structural');
-					}, //  || edge.data('owner') || edge.data('label') == '/metaGrammar/source'; },
-				}));
-				layout.run();
-				layout.pon('layoutstop').then(function(e) {
-					console.log("done");
-					cy.on('grab free position', 'node', grabHandler);
-				});
-			});
-			//});
+			cy.on('grab free position', 'node', grabHandler);
 		});
 		layout.pon('layoutready').then(function(e) {
-			console.log("FIT!");
 			cy.fit();
 		});
 		console.log("laying out local nodes");
 
 		cy.on('layoutstart', function(e) {
-			$('#status').html("Laying out nodes");
+			$('#status').html("Laying out nodes...");
 		});
 		cy.on('layoutstop', function(e) {
-			if ($('#status').text() == "Laying out nodes")
+			if ($('#status').text() == "Laying out nodes...")
 				$('#status').html("OK");
 		});
 
@@ -392,13 +412,11 @@
 
 			switch (e.type) {
 			case 'grab':
-				console.log("Grabbing node " + node.data('id'));
 				layout.adaptor.dragstart(scrCola);
 				layout.adaptor.resume();
 				setTimer();
 				break;
 			case 'free':
-				console.log("Freeing node " + node.data('id'));
 				layout.adaptor.dragend(scrCola);
 				setTimer();
 				break;
@@ -446,6 +464,7 @@
 		default:
 			return ele.data('id').split("/").pop();
 		}
+
 	}
 </script>
 <style type='text/css'>
@@ -519,10 +538,11 @@ canvas {
 	border: 0px solid #333;
 }
 
-#main div, #left div, #right div { //
+/*
+#main div, #left div, #right div {
 	margin: 0px;
 }
-
+*/
 #main {
 	position: absolute;
 	left: 10%;
@@ -553,7 +573,7 @@ canvas {
 	left: 0px;
 	position: absolute;
 	width: 100%;
-	height: 6em;
+	height: 0em;
 	background-color: #ddd;
 }
 
@@ -570,6 +590,44 @@ canvas {
 	/*	width: 15em;*/
 	background-color: #ddd;
 	opacity: 0.7;
+}
+
+#info {
+	font-size: small;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-size: medium;
+	font-weight: normal;
+	color: #ddd;
+	background-color: black;
+	margin: 0px;
+	padding: 2px 0px;
+}
+
+h1 {
+	font-size: large;
+	font-weight: bold;
+}
+
+h2 {
+	font-size: large;
+}
+
+h3 {
+	font-weight: bold;
+}
+
+h4 {
+	font-style: italic;
+}
+
+h5, h6 {
+	padding: 0px;
+}
+
+p, ul {
+	margin: 2px 0px;
 }
 </style>
 </head>
@@ -595,7 +653,10 @@ canvas {
 		</div>
 	</div>
 	<div id="right">
-		<div id="editor"></div>
+		<div id="editor">
+			<h1>Editor</h1>
+			<div id="editorcontrol"></div>
+		</div>
 		<div id="info"></div>
 	</div>
 	<div id="bottom">

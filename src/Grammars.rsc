@@ -47,10 +47,11 @@ public Id SOURCE = newId(metaGrammar, "source");
 public Id STRING_VALUE = newId(metaGrammar, "stringValue");
 public Id ELEMENT = newId(metaGrammar, "element");
 public Id DEFINES = newId(metaGrammar, "defines");
-public Id PRODUCES = newId(metaGrammar, "produces");
 public Id LABEL = newId(metaGrammar, "label");
 public Id LABELLED = newId(metaGrammar, "labelled");
 public Id NEXT = newId(metaGrammar, "next");
+public Id BINDS_TO = newId(metaGrammar, "bindsTo");
+public Id REFERS_TO = newId(metaGrammar, "refersTo");
 
 
 Id nextId(this(), int childNum) = ident(".<childNum>");
@@ -80,7 +81,6 @@ public Graph grammarToGraph(Grammar gr, str name) {
 	Graph g = newGraph(name);
 	g += <SORT,IS,STRUCTURAL>;
 	g += <ELEMENT,IS,STRUCTURAL>;
-//	g += <PRODUCES,IS,STRUCTURAL>;
 //	g += <DEFINES,IS,STRUCTURAL>;
 	
 	
@@ -127,7 +127,7 @@ public tuple[Graph,SymTable,set[Id]] prodToGraph(P:choice(s,alts), Id id, Graph 
 	set[Id] tails = {};
 	for(p <- alts) {
 		childId = nextId(id, i);
-		g += <id, ELEMENT, childId>;
+		g += <id, BINDS_TO, childId>;
 		g += <id, NEXT, childId>;
 		//g += <childId, DEFINES, id>;
 		<g, symTable,ts> = prodToGraph(p, childId, g, symTable);
@@ -186,8 +186,8 @@ public tuple[Graph,SymTable,set[Id]] symToGraph(S:alt(alts), Id id, Graph g, Sym
 			g += <id, string(n), childId>;
 		}
 		g += <id, NEXT, childId>;
-		<g, symTable, tail> = symToGraph(p, childId, g, symTable);
-		tails += tail;
+		<g, symTable, tl> = symToGraph(p, childId, g, symTable);
+		tails += tl;
 		
 		i += 1;
 	}
@@ -331,7 +331,7 @@ public tuple[Graph,SymTable,set[Id]] basicSymToGraph(Symbol S, str s, Id kind, I
 		g += <id, IS, kind>;
 		if(kind in {CF_SYM, LEX_SYM, KW_SYM, LAYOUT_SYM}) {
 			<symId, symTable> = symToId(S, symTable);
-			g += <id, PRODUCES, symId>;
+			g += <id, REFERS_TO, symId>;
 		}
 		if(kind in [LIT_SYM,CILIT_SYM])
 			g += <id, STRING_VALUE, string(s)>;

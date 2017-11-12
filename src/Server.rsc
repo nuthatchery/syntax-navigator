@@ -125,8 +125,14 @@ public Response (Request) graphServer(Graph gs...) {
 			}
 			return response(notFound(), "Graph not found: <path>");
 		}
-		case get(/^\/js\/<file:[a-zA-Z0-9_][a-zA-Z0-9\._\-]*>$/):
-			return response(|project://syntax-navigator/libs/<file>|); 
+		case get(/^\/js\/<file:[a-zA-Z0-9_][a-zA-Z0-9\._\-]*>$/): {
+			for(dir <- ["libs", "js"]) {
+				f = |project://syntax-navigator/<dir>/<file>|;
+				if(exists(f))
+					return response(f);
+			}
+			return response(notFound(), "File not found: <path>");
+		} 
 		case get(/^\/<file:([a-zA-Z0-9][a-zA-Z0-9\.]*\/)*[a-zA-Z0-9][a-zA-Z0-9\.]*>$/):
 			return response(|project://syntax-navigator/html/<file>|); 
 		case get(p): return response(notFound(), "not found: <p>"); 
@@ -165,7 +171,7 @@ public Response serveGraph(Request req, str path, str subPath, Graph g) {
 	str(Graph) formatter = str(Graph gg) { return "<gg>"; };
 	
 	switch(req.parameters["format"] ? "json") {
-	case "cyto": {format = "application/json"; formatter = str(Graph gg) { return toCyto(gg, unlink={NAME,CONFORMS_TO}); };}
+	case "cyto": {format = "application/json"; formatter = str(Graph gg) { return toCyto(gg, unlink={/*NAME,CONFORMS_TO*/}); };}
 	case "json": {format = "application/json"; formatter = str(Graph gg) { return toJson(gg); };}
 	default: throw "Unknown data format: <req.parameters["format"]>";
 	}

@@ -313,6 +313,10 @@ public str toCyto(Graph g, set[Id] unlink = {}) {
 		cm["target"] = jsonStr(tStr);
 		cm["local"] = f in nodes && t in nodes ? "true" : "false";
 		cm["owner"] = jsonStr(toString(ownerOf(l)));
+		if(ordinal(_,_) := l) {
+			cm["label"] = cm["name"];
+			cm["order"] = cm["intValue"];
+		}
 		append jsonObj(("group":jsonStr("edges"), "data":jsonObj(cm)));
 	}
  	return "[\n<intercalate(",\n", r)>\n]\n";
@@ -323,6 +327,13 @@ public str toCyto(Graph g, set[Id] unlink = {}) {
 public Graph qualifyGraph(Graph g) = qualifyGraph(g, getOne(g, this(), IDENTITY));
 
 public Graph qualifyGraph(Graph g, Id id) = visit(g) {
+	case this() => id
+	case ident(s) => ident(id, s)
+};
+
+public &T qualifyValue(&T v, Graph g) = qualifyValue(v, getOne(g, this(), IDENTITY));
+
+public &T qualifyValue(&T v, Id id) = visit(v) {
 	case this() => id
 	case ident(s) => ident(id, s)
 };

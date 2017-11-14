@@ -11,15 +11,16 @@
 <script src="/js/codemirror.min.js"></script>
 <script src="/js/animation.js"></script>
 <script src="/js/graph.js"></script>
+<script src="/js/graphStyles.js"></script>
 <script type='text/javascript'>
 	//cycola(cytoscape, window.cola);
 	var cy;
+	var graphName = '/ParseTrees';
 	$(function() {
 		var args = getUrlVars();
-		var graph = '/ParseTrees';
 		var query = '?format=cyto';
 		if ('graph' in args) {
-			graph = args['graph'];
+			graphName = args['graph'];
 		}
 		if ('filter' in args) {
 			query += '&filter=' + args['filter'];
@@ -28,7 +29,7 @@
 		$.ajax({
 			type : 'GET',
 			datatype : 'JSON',
-			url : '/api/v1' + graph + query,
+			url : '/api/v1' + graphName + query,
 			success : viewGraph
 		});
 
@@ -66,42 +67,41 @@
 			n = todo.shift();
 			seen[n.data('id')] = true;
 			var orderedElems = [];
-			n.outgoers().forEach(
-				function(e) {
-					if (edgeFilter(e)) {
-						target = e.target();
-						if(e.data('type') == 'ordinal') {
-							//console.log("order: " + e.data('intValue') + ": " + target.data('id'));
-							orderedElems[e.data('intValue')] = target;
-						}
-						//console.log("New constraint: " + axis + " "
-						//		+ n.data('id') + " → " + target.data('id')
-						//		+ " gap " + gap);
-						constraints.push({
-							'axis' : axis,
-							'left' : n,
-							'right' : target,
-							'gap' : gap
-						});
-						if (!seen[target.data('id')]) {
-							todo.push(target);
-						}
+			n.outgoers().forEach(function(e) {
+				if (edgeFilter(e)) {
+					target = e.target();
+					if ($.isNumeric(e.data('order'))) {
+						//console.log("order: " + e.data('intValue') + ": " + target.data('id'));
+						orderedElems[e.data('order')] = target;
 					}
-				});
-			if(orderedElems.length > 1) {
+					console.log("New constraint: " + axis + " "
+							+ n.data('id') + " → " + target.data('id')
+							+ " gap " + gap);
+					constraints.push({
+						'axis' : axis,
+						'left' : n,
+						'right' : target,
+						'gap' : gap
+					});
+					if (!seen[target.data('id')]) {
+						todo.push(target);
+					}
+				}
+			});
+			if (orderedElems.length > 1) {
 				var last = undefined;
 				$.each(orderedElems, function(e) {
 					e = orderedElems[e];
-					if(last != undefined) {
-						//console.log("order: " + last.data('id') + " left of " + e.data('id'));
+					if (last != undefined) {
+						console.log("order: " + last.data('id') + " left of " + e.data('id'));
 						constraints.push({
 							'axis' : axis == 'x' ? 'y' : 'x',
 							'left' : last,
 							'right' : e,
-							'gap' : gap
+							'gap' : gap/2
 						});
 					}
-					last = e;	
+					last = e;
 				});
 			}
 		}
@@ -109,22 +109,24 @@
 		return constraints;
 	}
 
+	var layoutOpts;
 	function viewGraph(data) {
 		$('#status').html("Processing graph...");
-		var layoutOpts = {
+		layoutOpts = {
 			name : 'cola',
 			//flow : {
 			//	axis : 'x',
 			//	minSeparation : 75
 			//},
 			avoidOverlaps : true,
-			maxSimulationTime : 1000,
+			maxSimulationTime : 10000,
+			handleDisconnected: true,
 			//animate: false,
 			//infinite: true,
 			randomize : false,
 			unconstrIter : 50,
-			userConstIter : 20,
-			allConstIter : 20,
+			userConstIter : 50,
+			allConstIter : 5,
 			fit : false,
 		//						edgeLength: 10,
 		//						edgeJaccardLength: 170
@@ -148,17 +150,25 @@
 				selector : 'node',
 				style : {
 					'background-color' : '#ccc',
+					'border-color' : '#aaa',
+					'background-opacity': 1.0,
 					'text-outline-color' : '#ccc',
 					'text-outline-width' : 1.0,
 					'label' : 'data(text)',
 					'text-halign' : 'center',
-					'text-valign' : 'center'
+					'text-valign' : 'center',
+					'background-height': 100,
+					'background-width': 100,
+					'height': 25,
+					'width': 25,
 				}
 			}, {
 				selector : 'node[?local]',
 				style : {
 					'background-color' : '#daa',
+					'border-color' : '#b88',
 					'text-outline-color' : '#daa',
+					'font-size': 40,
 				}
 			}, {
 				selector : 'node:selected',
@@ -169,27 +179,12 @@
 				selector : '.\\/values\\/uris',
 				style : {
 					'shape' : 'tag',
-					'width' : 'label',
-					'height' : 'label',
+					//'width' : 'label',
+					//'height' : 'label',
 					'text-halign' : 'center',
 					'text-valign' : 'center'
 				}
-			}, {
-				selector : '.\\/metaGrammar\\/symbol',
-				style : {
-					'shape' : 'triangle'
-				}
-			}, {
-				selector : '.\\/metaGrammar\\/production',
-				style : {
-					'shape' : 'rhomboid'
-				}
-			}, {
-				selector : '[label="/modelling/is"]',
-				style : {
-				//'display' : 'none'
-				}
-			}, {
+			},  {
 				selector : '[?local]',
 				style : {
 					'background-opacity' : '1'
@@ -207,30 +202,16 @@
 					'target-arrow-color' : '#ccc',
 					'target-arrow-shape' : 'triangle',
 					'target-arrow-fill' : 'filled',
+					'mid-target-arrow-color' : '#ccc',
+					'mid-target-arrow-shape' : 'triangle',
+					'mid-target-arrow-fill' : 'filled',
 					'text-rotation' : 'autorotate',
 					'arrow-scale' : 1,
 					'label' : 'data(text)',
-					'ghost' : 'yes',
+					//'ghost' : 'yes',
+					'font-size' : 8,
 				}
-			}, {
-				selector : 'edge[?structural]',
-				style : {
-					'line-color' : '#d66',
-					'target-arrow-color' : '#d66',
-					'text-outline-color' : '#fcc',
-					'width' : 5,
-					'z-index' : 150,
-				}
-			}, {
-				selector : '[label="/metaGrammar/next"]',
-				style : {
-					'line-color' : '#6d6',
-					'target-arrow-color' : '#6d6',
-					'text-outline-color' : '#fcc',
-					'width' : 7,
-					'z-index' : 150,
-				}
-			}, {
+			},   {
 				selector : 'node.owner',
 				style : {
 					display : 'none',
@@ -257,9 +238,9 @@
 				style : {
 					'background-color' : '#f00'
 				}
-			} ],
+			},   ],
 			layout : {
-				name : 'random'
+				name : 'null'
 			}
 		});
 
@@ -277,7 +258,7 @@
 
 		cy.on('tap', function(evt) {
 			element = evt.target;
-			if (element.data()) {
+			if (element.data) {
 				var s = $('<div></div>');
 				if (element.isNode()) {
 					s.append('<h1>Node Info</h1>');
@@ -292,7 +273,7 @@
 					var key = $('<a>' + text + '</a>');
 					var val = $('<a>' + val + '</a>');
 					//					if(n.data('id')) {
-					var edges = cy.edges('[label="' + keyName + '"]');
+					var edges = cy.edges('[label="' + keyName.split('#')[0] + '"]');
 					var selected = edges.union(n);
 					key.on('mouseenter', function(event) {
 						highlightElements(selected);
@@ -323,31 +304,35 @@
 			}
 		});
 
-		addElementsFromJson(data);
+		elements = addElementsFromJson(data);
+		var graph = new Graph(elements, {});
+		
+		var graphType = 'default';
+		console.log("graphName: " + graphName);		
+		$.each(getAttrList(graphName, "/modelling/conformsTo"), function(i,a) {
+			console.log(a);
+			if(a in graphStyles) {
+				graphType = a;
+			}
+		});
+		var graphStyle = graphStyles[graphType];
+		console.log("graphType: " + graphType);
+		cy.style().appendFromJson(graphStyle.style).update();
+		
+		var constraints = makeTreeConstraints(cy.elements(), [ cy
+				.$id(graphName) ], graphStyle.constraintEdgeFilter, 'y', 200);
 
-		var edgeFilter = function(edge) {
-			return edge.data('label') == '/metaGrammar/sort'
-					|| edge.data('label') == '/metaGrammar/next'
-					|| edge.data('structural');
-		}
+		constraints = constraints.concat(makeBoxConstraints(graph));
+		
+		if(graphStyle.moreConstraints)
+			constraints = constraints.concat(graphStyle.moreConstraints());
+		
+		layoutOpts = $.extend(layoutOpts, {
+			constraints : constraints,
+			edgeFilter : graphStyle.edgeFilter
+		});
+		var layout = cy.layout(layoutOpts);
 
-		locals = cy.edges('[?local]');
-		locals = locals.union(locals.connectedNodes());
-		remoteNodes = cy.collection() - locals;
-
-		var layout = window.layout = cy.layout($.extend(layoutOpts, {
-			edgeFilter : function(edge) {
-				return edge.data('label') == '/metaGrammar/next'; // edge.data('structural');
-			}, //  || edge.data('owner') || edge.data('label') == '/metaGrammar/source'; },
-		//					edgeFilter: function(edge) { return edge.data('label').match(/element/);  },
-		//					edgeLength: function(edge) { return edge.data('label') == '/metaGrammar/source' ? 350 : 150; },
-		}));
-		var layoutAll = cy.layout($.extend(layoutOpts, {
-			unconstrIter : 0,
-			userConstIter : 0,
-			allConstIter : 0,
-			refresh : 1,
-		}));
 		var grabHandler;
 		layout.pon('layoutstop').then(function(e) {
 			cy.on('grab free position', 'node', grabHandler);
@@ -373,7 +358,7 @@
 		// handle node dragging
 		var timer;
 		grabHandler = function(e) {
-			var bb = layout.options.boundingBox || {
+			var bb = window.layout.options.boundingBox || {
 				x1 : 0,
 				y1 : 0,
 				w : cy.width(),
@@ -396,10 +381,10 @@
 				if (timer)
 					clearTimeout(timer);
 				timer = setTimeout(function() {
-					if (!layout.manuallyStopped) {
-						layout.adaptor.stop();
+					if (!window.layout.manuallyStopped) {
+						window.layout.adaptor.stop();
 					}
-				}, layout.options.maxSimulationTime);
+				}, window.layout.options.maxSimulationTime);
 			}
 			var node = this;
 			var scrCola = node.scratch().cola;
@@ -412,12 +397,12 @@
 
 			switch (e.type) {
 			case 'grab':
-				layout.adaptor.dragstart(scrCola);
-				layout.adaptor.resume();
+				window.layout.adaptor.dragstart(scrCola);
+				window.layout.adaptor.resume();
 				setTimer();
 				break;
 			case 'free':
-				layout.adaptor.dragend(scrCola);
+				window.layout.adaptor.dragend(scrCola);
 				setTimer();
 				break;
 			case 'position':
@@ -426,7 +411,7 @@
 						|| scrCola.py !== pos.y - bb.y1) {
 					scrCola.px = pos.x - bb.x1;
 					scrCola.py = pos.y - bb.y1;
-					layout.adaptor.resume();
+					window.layout.adaptor.resume();
 				}
 				break;
 			}
@@ -435,12 +420,65 @@
 		window.cy = cy;
 		window.layout = layout;
 		window.layoutOpts = layoutOpts;
+		window.constraints = constraints;
 
+		if(graphType == '/metaParseTree/parseTree') {
+			grammar = getOneAttr(graphName, '/metaParseTree/conformsTo');
+			console.log(grammar);
+			if(grammar) {
+				$('#status').html("Loading Grammar...");
+				$.ajax({
+					type : 'GET',
+					datatype : 'JSON',
+					url : '/api/v1' + grammar + "?filter=and()&format=cyto",
+					success : function(data) { viewExtraGraph(data, grammar, graph); }
+				});
+			}
+		}
 	}
 
+	function viewExtraGraph(data, graphName, otherGraph) {
+		$('#status').html("Processing graph...");
+		var elements = addElementsFromJson(data);
+		var graph = new Graph(elements, {'rightOf' : otherGraph});
+		console.log(graph.leftLimit);
+		console.log(graph.rightLimit);
+		console.log(graph.topLimit);
+		console.log(graph.bottomLimit);
+
+		var graphType = 'default';
+		console.log("graphName: " + graphName);		
+		$.each(getAttrList(graphName, "/modelling/conformsTo"), function(i,a) {
+			if(a in graphStyles) {
+				graphType = a;
+			}
+		});
+		var graphStyle = graphStyles[graphType];
+		console.log("graphType: " + graphType);
+		cy.style().appendFromJson(graphStyle.style).update();
+		
+		layoutOpts.constraints = layoutOpts.constraints.concat(makeBoxConstraints(graph));
+
+		if(graphStyle.moreConstraints)
+			layoutOpts.constraints = layoutOpts.constraints.concat(graphStyle.moreConstraints());
+		
+		layoutOpts.constraints = layoutOpts.constraints.concat(makeTreeConstraints(elements, [ cy
+				.$id(graphName) ], graphStyle.constraintEdgeFilter, 'y', 200));
+
+		var oldEf = layoutOpts.edgeFilter;
+		layoutOpts.edgeFilter = function(e) { return oldEf(e) || graphStyle.edgeFilter(e); };
+		
+		window.layout = cy.layout(layoutOpts);
+
+		window.layout.run();
+
+	}
+	
 	function getText(ele) {
 		if (ele.data('/metaGrammar/stringValue'))
 			return ele.data('/metaGrammar/stringValue')[0];
+		if (ele.data('/metaParseTree/stringValue'))
+			return ele.data('/metaParseTree/stringValue')[0];
 		if (ele.data('/modelling/name')) {
 			name = ele.data('/modelling/name');
 			if (name.startsWith("\"") && name.endsWith("\""))

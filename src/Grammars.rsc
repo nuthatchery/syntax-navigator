@@ -14,14 +14,16 @@ import IO;
 import Triples;
 
 alias SymTable = map[Symbol,Id];
+alias ProdTable = map[Production,Id];
 
 public Graph metaGraph = newGraph("metaGraph");
-public Id STRUCTURAL = newId(metaGraph, "structural");
 
 public Graph metaGrammar = newGraph("metaGrammar");
 	
+public Id GRAMMAR = newId(metaGrammar, "grammar");
 public Id SORT = newId(metaGrammar, "sort");
 public Id START = newId(metaGrammar, "start");
+public Id STOP = newId(metaGrammar, "stop");
 public Id CF_SORT = newId(metaGrammar, "cfSort");
 public Id LEX_SORT = newId(metaGrammar, "lexSort");
 public Id LAYOUT_SORT = newId(metaGrammar, "layoutSort");
@@ -63,7 +65,7 @@ Id nextId(ident(parent, old), str childNum) = ident(parent, "<old>.<childNum>");
 Id nextId(ident(old), str childNum) = ident("<old>.<childNum>");
 Id nextId(ident(parent, old), str childNum) = ident(parent, "<old>.<childNum>");
 
-public tuple[Graph,map[Production,loc]] loadGrammar(loc grammarModule) {
+public tuple[Graph,map[Production,Id]] loadGrammar(loc grammarModule) {
 	Module m = parseModule(grammarModule);
 	<n,_,_> = getModuleMetaInf(m);
 	set[SyntaxDefinition] syntaxDefs = getModuleSyntaxDefinitions(m);
@@ -72,20 +74,19 @@ public tuple[Graph,map[Production,loc]] loadGrammar(loc grammarModule) {
   	gd = \definition(nm, (nm:\module(nm, {}, {}, gr)));	
 	gd = \layouts(gd);
 	gr = fuse(gd);
-	g = grammarToGraph(gr, n);
-	return <g, findGrammarLocs(gr)>;
+	return grammarToGraph(gr, n);
 }
 
 
-public Graph grammarToGraph(Grammar gr, str name) {
+public tuple[Graph, map[Production,Id]] grammarToGraph(Grammar gr, str name) {
 	Graph g = newGraph(name);
-	g += <SORT,IS,STRUCTURAL>;
-	g += <ELEMENT,IS,STRUCTURAL>;
-//	g += <DEFINES,IS,STRUCTURAL>;
-	
-	
+	ProdTable prodTable = ();	
 	SymTable symTable = ();
 	id = this();
+	
+	g += <this(), CONFORMS_TO, GRAMMAR>;
+	prodTable[\others(\start(\sort("$thisGrammar$")))] = this();
+	
 	int i = 0;	
 	for(s <- gr.starts) {
 		childId = nextId(id, i);
@@ -97,22 +98,23 @@ public Graph grammarToGraph(Grammar gr, str name) {
 	for(s <- gr.rules) {
 		childId = nextId(id, i);
 		<childId, symTable> = symToId(s, childId, symTable);
-		g += <this(), SORT, childId>;
+		g += <this(), ordinal("/metaGrammar/bindsTo", i), childId>;
 
 //		println("<s>: <gr.rules[s]>");
-		<g,symTable,tails> = prodToGraph(gr.rules[s], childId, g, symTable);
+		<g,symTable,tails, prodTable> = prodToGraph(gr.rules[s], childId, g, symTable, {}, prodTable);
 		endId = nextId(childId, "end");
-		g += <endId, IS, STRUCTURAL>;
+		g += <endId, CONFORMS_TO, SYMBOL>;
+		g += <endId, CONFORMS_TO, STOP>;
 		for(t <- tails)
 			g += <t, NEXT, endId>;
 		i += 1;
 	}
-	return g;
+	return <g, qualifyValue(prodTable, g)>;
 }
-public tuple[Graph,SymTable,set[Id]] prodToGraph(P:choice(_,{p}), Id id, Graph g, SymTable symTable)
-	= prodToGraph(p, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] prodToGraph(P:choice(_,{p}), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= prodToGraph(p, id, g, symTable, tails, prodTable);
 
-public tuple[Graph,SymTable,set[Id]] prodToGraph(P:choice(s,alts), Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] prodToGraph(P:choice(s,alts), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	g += <id, CONFORMS_TO, PRODUCTION>;
 	g += <id, CONFORMS_TO, SYMBOL>;
 	g += <id, NAME, string("<sym2userName(s)>→")>;
@@ -124,23 +126,24 @@ public tuple[Graph,SymTable,set[Id]] prodToGraph(P:choice(s,alts), Id id, Graph 
 	//<g, symTable> = symToGraph(s, childId, g, symTable);
 
 	i += 1;
-	set[Id] tails = {};
+	tails = {};
+	set[Id] last = {id};
 	for(p <- alts) {
 		childId = nextId(id, i);
-		g += <id, BINDS_TO, childId>;
+		g += <id, ordinal("/metaGrammar/bindsTo", i), childId>;
 		g += <id, NEXT, childId>;
 		//g += <childId, DEFINES, id>;
-		<g, symTable,ts> = prodToGraph(p, childId, g, symTable);
+		<g, symTable,ts, prodTable> = prodToGraph(p, childId, g, symTable, last, prodTable);
 		tails += ts;
+		last = ts;
 		i += 1;
 	}
-	return <g, symTable, tails>;
+	return <g, symTable, tails, prodTable>;
 }
-public tuple[Graph,SymTable,set[Id]] prodToGraph(P:prod(s,syms,_), Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] prodToGraph(P:prod(s,syms,_), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	//<id, symTable> = symToId(s, id, symTable);
 	g += <id, CONFORMS_TO, PRODUCTION>;
 	g += <id, CONFORMS_TO, SYMBOL>;
-	g += <id, IS, STRUCTURAL>;
 	g += <id, NAME, string("<sym2userName(s)>→")>;
 //	g += <id, STRING_VALUE, string(prodToStr(P))>;
 	if(P@\loc?) {
@@ -152,32 +155,34 @@ public tuple[Graph,SymTable,set[Id]] prodToGraph(P:prod(s,syms,_), Id id, Graph 
 	//<g, symTable> = symToGraph(s, childId, g, symTable);
 	
 	int i = 0;
-	set[Id] tails = {id};
+	tails = {id};
+	set[Id] last = {id};
 	for(p <- syms) {
 		childId = nextId(id, i);
 		//<childId, symTable> = symToId(p, childId, symTable);
-		if(t <- tails)
+		for(t <- tails) {
 			g += <t, NEXT, childId>;
-		g += <id, ordinal("element", i), childId>;
+		}
+		g += <id, ordinal("/metaGrammar/element", i), childId>;
 		if(label(n,_) := p) {
 			g += <id, string(n), childId>;
 		}
-		<g, symTable,tails> = symToGraph(p, childId, g, symTable);
+		<g, symTable,tails, prodTable> = symToGraph(p, childId, g, symTable, last, prodTable);
+		last = tails;
 		i += 1;
 	}
-	return <g, symTable, tails>;
+	return <g, symTable, tails, prodTable>;
 }
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:alt({s}), Id id, Graph g, SymTable symTable)
-	= symToGraph(s, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:alt({s}), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= symToGraph(s, id, g, symTable, tails, prodTable);
 	
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:alt(alts), Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:alt(alts), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	g += <id, CONFORMS_TO, SYMBOL>;
 	g += <id, IS, ALTERNATIVES>;
-	g += <id, IS, STRUCTURAL>;
 	//g += <id, NAME, string("…|…")>;
 	int i = 0;
-	set[Id] tails = {};
+	tails = {};
 	for(p <- alts) {
 		childId = nextId(id, i);
 		//<childId, symTable> = symToId(p, childId, symTable);
@@ -186,54 +191,55 @@ public tuple[Graph,SymTable,set[Id]] symToGraph(S:alt(alts), Id id, Graph g, Sym
 			g += <id, string(n), childId>;
 		}
 		g += <id, NEXT, childId>;
-		<g, symTable, tl> = symToGraph(p, childId, g, symTable);
+		<g, symTable, tl, prodTable> = symToGraph(p, childId, g, symTable, {id}, prodTable);
 		tails += tl;
 		
 		i += 1;
 	}
-	return <g, symTable, tails>;
+	return <g, symTable, tails, prodTable>;
 }
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:seq([s]), Id id, Graph g, SymTable symTable)
-	= symToGraph(s, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:seq([s]), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= symToGraph(s, id, g, symTable, tails, prodTable);
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:seq(syms), Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:seq(syms), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	g += <id, CONFORMS_TO, SYMBOL>;
 	g += <id, IS, SEQUENCE>;
-	g += <id, IS, STRUCTURAL>;
 	//g += <id, NAME, string("…,…")>;
 	int i = 0;
-	set[Id] tails = {id};
+	tails = {id};
+	set[Id] last = {id};
 	for(p <- syms) {
 		childId = nextId(id, i);
 		//<childId, symTable> = symToId(p, childId, symTable);
-		g += <id, ordinal("element", i), childId>;
+		g += <id, ordinal("/metaGrammar/element", i), childId>;
 		for(t <- tails) {
 			g += <t, NEXT, childId>;
 		}
 		if(label(n,_) := p) {
 			g += <id, string(n), childId>;
 		}
-		<g, symTable, tails> = symToGraph(p, childId, g, symTable);
+		<g, symTable, tails, prodTable> = symToGraph(p, childId, g, symTable, last, prodTable);
+		last = tails;
 		i += 1;
 	}
-	return <g, symTable, tails>;
+	return <g, symTable, tails, prodTable>;
 }
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:iter(Symbol s), Id id, Graph g, SymTable symTable)
-	= iter(1, -1, [], s, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:iter(Symbol s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= iter(1, -1, [], s, id, g, symTable, tails, prodTable);
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\iter-star(Symbol s), Id id, Graph g, SymTable symTable)
-	= iter(0, -1, [], s, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\iter-star(Symbol s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= iter(0, -1, [], s, id, g, symTable, tails, prodTable);
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\iter-seps(Symbol s, list[Symbol] seps), Id id, Graph g, SymTable symTable)
-	= iter(1, -1, seps, s, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\iter-seps(Symbol s, list[Symbol] seps), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= iter(1, -1, seps, s, id, g, symTable, tails, prodTable);
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\iter-star-seps(Symbol s, list[Symbol] seps), Id id, Graph g, SymTable symTable)
-	= iter(0, -1, seps, s, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\iter-star-seps(Symbol s, list[Symbol] seps), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= iter(0, -1, seps, s, id, g, symTable, tails, prodTable);
 
 
-public tuple[Graph,SymTable,set[Id]] iter(int min, int max, list[Symbol] seps, Symbol s, Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] iter(int min, int max, list[Symbol] seps, Symbol s, Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	g += <id, IS, ITER_SYM>;
 	g += <id, REPEAT_MIN, integer(min)>;
 	if(max < 0) {
@@ -243,23 +249,30 @@ public tuple[Graph,SymTable,set[Id]] iter(int min, int max, list[Symbol] seps, S
 		g += <id, REPEAT_MAX, integer(max)>;
 	}
 	
+	<g, symTable, symTails, prodTable> = symToGraph(s, id, g, symTable, {id}, prodTable);
+
 	set[Id] iterTails = {};
+	set[Id] last = symTails;
+	Id sepId;
 	if(seps != []) {
 		sep = size(seps) == 1 ? seps[0] : seq(seps);
-		childId = nextId(id, "sep");
+		sepId = nextId(id, "sep");
 		//<childId, symTable> = symToId(sep, childId, symTable);
-		<g, symTable, iterTails> = symToGraph(sep, childId, g, symTable);
-		g += <id, SEPARATE_BY, childId>;
+		<g, symTable, iterTails, prodTable> = symToGraph(sep, sepId, g, symTable, last, prodTable);
+		last = iterTails;
+		g += <id, SEPARATE_BY, sepId>;
+		g += <sepId, NEXT, id>;
 	}
 
-	<g, symTable, tails> = symToGraph(s, id, g, symTable);
-	for(t <- tails) {
-		g += <t, NEXT, id>;
-		g += <id, NEXT, t>;
+	for(t <- symTails) {
+		if(seps != [])
+			g += <t, NEXT, sepId>;
+		else
+			g += <t, NEXT, id>;
 	}
 	
-	if(min > 0)
-		tails += id;
+	if(min == 0)
+		symTails += tails;
 		
 	childName = "";
 	if({Id i:string(n)} := g[id][NAME]) {
@@ -276,11 +289,11 @@ public tuple[Graph,SymTable,set[Id]] iter(int min, int max, list[Symbol] seps, S
 		childName = "<childName>{<min>,<max>}";
 	g += <id, NAME, string(childName)>; 
 	
-	
-	return <g, symTable, tails>;
+	println(symTails);
+	return <g, symTable, symTails, prodTable>;
 }
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\char-class(rng), Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\char-class(rng), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	g += <id, CONFORMS_TO, SYMBOL>;
 	g += <id, IS, ALTERNATIVES>;
 	g += <id, NAME, string(printSymbol(S,false))>;
@@ -298,34 +311,34 @@ public tuple[Graph,SymTable,set[Id]] symToGraph(S:\char-class(rng), Id id, Graph
 				g += <rId, NAME, string("[<makeCharClassChar(f)>-<makeCharClassChar(t)>]")>;
 		}
 	}
-	return <g, symTable, {id}>;
+	return <g, symTable, {id}, prodTable>;
 }
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\label(l, s), Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\label(l, s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	g += <id, LABEL, string(l)>;
 	g += <id, IS, LABELLED>;
-	<g, symTable, tails> = symToGraph(s, id, g, symTable);
+	<g, symTable, tails, prodTable> = symToGraph(s, id, g, symTable, tails, prodTable);
 	if({Id i:string(n)} := g[id][NAME]) {
 		g -= <id, NAME, i>;
 		g += <id, NAME, string("<l>: <n>")>; 
 	}
-	return <g, symTable, tails>;
+	return <g, symTable, tails, prodTable>;
 }
 
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\lex(s), Id id, Graph g, SymTable symTable)
-	= basicSymToGraph(S, s, LEX_SYM, id, g, symTable);
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\sort(s), Id id, Graph g, SymTable symTable)
-	= basicSymToGraph(S, s, CF_SYM, id, g, symTable);
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\lit(s), Id id, Graph g, SymTable symTable)
-	= basicSymToGraph(S, s, LIT_SYM, id, g, symTable);
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\cilit(s), Id id, Graph g, SymTable symTable)
-	= basicSymToGraph(S, s, CILIT_SYM, id, g, symTable);
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\keywords(s), Id id, Graph g, SymTable symTable)
-	= basicSymToGraph(S, s, KW_SYM, id, g, symTable);
-public tuple[Graph,SymTable,set[Id]] symToGraph(S:\layouts(s), Id id, Graph g, SymTable symTable)
-	= basicSymToGraph(S, s, LAYOUT_SYM, id, g, symTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\lex(s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= basicSymToGraph(S, s, LEX_SYM, id, g, symTable, prodTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\sort(s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= basicSymToGraph(S, s, CF_SYM, id, g, symTable, prodTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\lit(s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= basicSymToGraph(S, s, LIT_SYM, id, g, symTable, prodTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\cilit(s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= basicSymToGraph(S, s, CILIT_SYM, id, g, symTable, prodTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\keywords(s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= basicSymToGraph(S, s, KW_SYM, id, g, symTable, prodTable);
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(S:\layouts(s), Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable)
+	= basicSymToGraph(S, s, LAYOUT_SYM, id, g, symTable, prodTable);
 	
-public tuple[Graph,SymTable,set[Id]] basicSymToGraph(Symbol S, str s, Id kind, Id id, Graph g, SymTable symTable) {
+public tuple[Graph,SymTable,set[Id], map[Production,Id]] basicSymToGraph(Symbol S, str s, Id kind, Id id, Graph g, SymTable symTable, ProdTable prodTable) {
 	if(SYMBOL notin g[id][CONFORMS_TO]) {
 		g += <id, CONFORMS_TO, SYMBOL>;
 		g += <id, IS, kind>;
@@ -338,17 +351,17 @@ public tuple[Graph,SymTable,set[Id]] basicSymToGraph(Symbol S, str s, Id kind, I
 		g += <id, NAME, string(sym2userName(S) ? "<S>")>;
 		//g += <id, IS, NT_SYM>;
 	}
-	return <g, symTable, {id}>;
+	return <g, symTable, {id}, prodTable>;
 }
 
-public default tuple[Graph,SymTable,set[Id]] symToGraph(Symbol s, Id id, Graph g, SymTable symTable) {
+public default tuple[Graph,SymTable,set[Id], map[Production,Id]] symToGraph(Symbol s, Id id, Graph g, SymTable symTable, set[Id] tails, ProdTable prodTable) {
 	println("Default: <s>");
 	if(SYMBOL notin g[id][CONFORMS_TO]) {
 		g += <id, CONFORMS_TO, SYMBOL>;
 		g += <id, NAME, string(sym2userName(s) ? "<s>")>;
 	//g += <id, IS, NT_SYM>;
 	}
-	return <g, symTable, {id}>;
+	return <g, symTable, {id}, prodTable>;
 }
 
 public tuple[Id,SymTable] symToId(Symbol s, SymTable symTable) {

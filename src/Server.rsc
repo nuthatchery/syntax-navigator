@@ -91,10 +91,14 @@ public void logEnd(Request req, Response res) {
 
 }
 
+public Graph loadedGrammar;
+public ProdTable loadedProdTable;
+
 public void serveIt() {
-	g = loadGrammar(|project://syntax-navigator/src/ParseTrees.rsc|)[0];
-	shutdown(|http://localhost:8080/|)?;
-	serve(|http://localhost:8080/|, graphServer(metaGrammar, metaParseTree, g));
+	<loadedGrammar,loadedProdTable> = loadGrammar(|project://syntax-navigator/src/ParseTrees.rsc|);
+	pt = ptToGraph((Expr)`a+b+c`, "TestExpr", loadedProdTable);
+	shutdown(|http://localhost:8088/|)?;
+	serve(|http://localhost:8088/|, graphServer(metaGrammar, metaParseTree, loadedGrammar, pt));
 }
 
 public Response (Request) graphServer(Graph gs...) {
@@ -125,7 +129,7 @@ public Response (Request) graphServer(Graph gs...) {
 			}
 			return response(notFound(), "Graph not found: <path>");
 		}
-		case get(/^\/js\/<file:[a-zA-Z0-9_][a-zA-Z0-9\._\-]*>$/): {
+		case get(path:/^\/js\/<file:[a-zA-Z0-9_][a-zA-Z0-9\._\-]*>$/): {
 			for(dir <- ["libs", "js"]) {
 				f = |project://syntax-navigator/<dir>/<file>|;
 				if(exists(f))
@@ -160,12 +164,14 @@ public Response serveGraph(Request req, str path, str subPath, Graph g) {
 		f = makeFilter(fExpr);
 		g = {x | x <- g, f(x)};
 	}
+	//log("<g[ident(ident(root(), "TestExpr"), "0.4.0")]>");
+	//log("<g[ident("0.4.0")]>");
 	
-	for(uri(u) <- g<0>+g<1>+g<2>) {
-		if(u.begin? || u.end? || u.offset? || u.length?) {
-			g += <uri(u), PART_OF, uri(toLocation(u.uri))>;
-		}
-	}
+	//for(uri(u) <- g<0>+g<1>+g<2>) {
+	//	if(u.begin? || u.end? || u.offset? || u.length?) {
+	//		g += <uri(u), PART_OF, uri(toLocation(u.uri))>;
+	//	}
+	//}
 	
 	str format = "text/plain";
 	str(Graph) formatter = str(Graph gg) { return "<gg>"; };

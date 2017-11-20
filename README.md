@@ -1,3 +1,5 @@
+Visualize syntactic expressions from Rascal using JavaScript.
+
 # Installation
 
 - Rascal MPL:

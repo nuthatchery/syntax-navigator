@@ -24,7 +24,6 @@ public class Triples {
 	}
 
 	public Triples(IValueFactory values) {
-		System.out.println("foo");
 		this.values = values;
 	}
 
@@ -57,7 +56,6 @@ public class Triples {
 		IString r = values.string("");
 		while (decoded.hasRemaining()) {
 			char c = decoded.get();
-			//System.out.println(c);
 			if(Character.isSurrogate(c)) {
 				char d = decoded.get();
 				System.out.println(Character.toCodePoint(c, d));

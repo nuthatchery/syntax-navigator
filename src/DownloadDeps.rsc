@@ -17,7 +17,7 @@ map[str,loc] dependencies =
 	"vivagraph.js" : |https://raw.githubusercontent.com/anvaka/VivaGraphJS/master/dist/vivagraph.js|,
 	"vivagraph.min.js" : |https://raw.githubusercontent.com/anvaka/VivaGraphJS/master/dist/vivagraph.min.js|
 	);
-	
+
 public void loadDeps(bool force = false) {
 	for(n <- dependencies) {
 		path = libraryPath + n;
@@ -29,4 +29,3 @@ public void loadDeps(bool force = false) {
 		}
 	}
 }
-

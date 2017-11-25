@@ -45,3 +45,13 @@ You should now see some JSON data.
 
 You need to download the JS dependencies to visualize things; see the
 `Installation` section.
+
+## Using M3
+
+In the Rascal terminal:
+
+```
+import lang::java::m3::Core;
+import lang::java::jdt::m3::Core;
+createM3FromEclipseProject(|project://syntax-navigator|).methodInvocation
+```

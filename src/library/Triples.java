@@ -22,6 +22,14 @@ public class Triples {
 		this.values = values;
 	}
 
+	/**
+	 * Return a list of the bytes representing `s`, encoded in
+	 * `charset`.
+	 *
+	 * @param s
+	 * @param charset
+	 * @return
+	 */
 	public IList chars(IString s, IString charset) {
 		Charset cs = Charset.forName(charset.getValue());
 

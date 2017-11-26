@@ -265,6 +265,9 @@ public str toJson(Graph g) {
  	return "{\n<intercalate(",\n", r)>\n}\n";
 }
 
+@doc{
+  Convert to a JSON representation for consumption by Cytoscape.js.
+}
 public str toCyto(Id id) = jsonObj(toCytoMap(id));
 public map[str,str] toCytoMap(I:uri(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("uri"), "uri":jsonStr(locToStr(x))));
 public map[str,str] toCytoMap(I:character(x)) = (("id":jsonStr(toString(I)), "type":jsonStr("character"), "intValue":"<x>", "strValue":jsonStr(stringChar(x))));

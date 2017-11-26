@@ -47,6 +47,7 @@ public Id Id(rat r) = rational(r);
 public Id Id(str s) = string(s);
 public Id Id(loc u) = uri(u);
 
+// A graph is a set of triples (three-tuples).
 alias Graph = rel[Id,Id,Id];
 
 Id valueOwner(str s) = ident(ident(root(), "values"), s);

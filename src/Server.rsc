@@ -94,6 +94,9 @@ public void logEnd(Request req, Response res) {
 public Graph loadedGrammar;
 public ProdTable loadedProdTable;
 
+@doc{
+  Serve on http://localhost:8088/.
+}
 public void serveIt() {
 	<loadedGrammar,loadedProdTable> = loadGrammar(|project://syntax-navigator/src/ParseTrees.rsc|);
 	pt = ptToGraph((Expr)`a+b+c`, "TestExpr", loadedProdTable);

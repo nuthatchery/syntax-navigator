@@ -11,6 +11,9 @@ import io.usethesource.vallang.IListWriter;
 import io.usethesource.vallang.IString;
 import io.usethesource.vallang.IValueFactory;
 
+/**
+ * Utility methods for things like URL encodings.
+ */
 public class Triples {
 	private IValueFactory values;
 

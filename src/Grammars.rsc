@@ -13,6 +13,7 @@ import lang::rascal::\syntax::Rascal;
 import IO;
 import Triples;
 
+// Symbol table and production table.
 alias SymTable = map[Symbol,Id];
 alias ProdTable = map[Production,Id];
 

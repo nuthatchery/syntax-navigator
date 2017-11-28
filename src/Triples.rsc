@@ -1,3 +1,20 @@
+// Triples are three-tuples.  Triples are the edges in the graph
+// (see the declaration of `Graph` in this file).  `Graph` is a set of
+// these edges; there are no explicit nodes/vertices.
+//
+// So each edge is a triple of this form:
+//
+//     〈id, label, childId〉
+//
+// • `id` is the original node/vertex.
+// • `label` is the edge’s label.
+// • `childId` is the next vertex.
+//
+// Or a little more graphically:
+//
+//     id    →    childId
+//         label
+//
 module Triples
 import util::Math;
 import String;

@@ -7,6 +7,9 @@
 }
 @contributor{Jurgen J. Vinju - Jurgen.Vinju@cwi.nl - CWI}
 @contributor{Arnold Lankamp - Arnold.Lankamp@cwi.nl}
+// NOTE: taken from the Rascal project (†1) with some modifications.
+//
+// †. 1: <https://github.com/usethesource/rascal/blob/master/src/org/rascalmpl/library/lang/rascal/grammar/definition/Productions.rsc>
 module Productions
 
 

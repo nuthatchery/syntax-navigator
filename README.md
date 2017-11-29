@@ -45,3 +45,33 @@ You should now see some JSON data.
 
 You need to download the JS dependencies to visualize things; see the
 `Installation` section.
+
+# Data model
+
+The data model is a graph which is a set of triples (three-tuples):
+
+```
+alias Graph = rel[Id,Id,Id];
+```
+
+The `rel[…]` data type is an alias for `set[tuple[…]]`, so the above
+declaration is in principle equivalent to:
+
+```
+alias Graph = set[tuple[Id,Id,Id]];
+```
+
+Each triple (`tuple[Id,Id,Id]`) in the graph represents an edge.  An
+instance of this type is:
+
+```
+<id, label, childId>
+```
+
+Where:
+
+- `id` is the original vertex/node.
+- `label` is the edge’s label.
+- `childId` is the next vertex.
+
+See: `src/Triples.rsc`.
